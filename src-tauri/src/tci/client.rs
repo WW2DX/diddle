@@ -304,7 +304,18 @@ impl TciClient {
         // queue empties and the final bit completes. A coarse batch size here
         // overshoots by up to a full bit-period-misalignment cycle (~0.7 s of
         // trailing mark carrier — the long TX tail).
-        gen.enqueue(&text);
+        // Enqueue with a per-character timeline so we can echo each character
+        // into the decoder window exactly as its tones go on the air (rather
+        // than dumping the whole message when TX completes). The message bits
+        // begin playing right after the lead-in, so a character at bit index
+        // `b` is heard at sample offset `lead_in_samples + b * samples_per_bit`.
+        let spb = gen.samples_per_bit();
+        let echo: Vec<(usize, char)> = gen
+            .enqueue_with_marks(&text)
+            .into_iter()
+            .map(|(bit, c)| (lead_in_samples + (bit as f32 * spb) as usize, c))
+            .collect();
+        let mut echo_idx = 0usize;
         let cap = sr as usize * 30; // safety cap (30 s)
         let mut produced = 0usize;
         while !gen.is_idle() && produced < cap {
@@ -337,21 +348,26 @@ impl TciClient {
                 cancelled = true;
                 break;
             }
-            let done = self
+            let position = self
                 .tx_state
                 .lock()
                 .unwrap()
                 .as_ref()
-                .map(|t| t.position >= total)
-                .unwrap_or(true);
-            if done {
+                .map(|t| t.position)
+                .unwrap_or(total);
+            // Echo every character whose audio has now started playing.
+            while echo_idx < echo.len() && echo[echo_idx].0 <= position {
+                let _ = self.app.emit("tx:echo", echo[echo_idx].1.to_string());
+                echo_idx += 1;
+            }
+            if position >= total {
                 break;
             }
             if start.elapsed() > Duration::from_secs(60) {
                 warn!("tx: timed out waiting for chrono drain");
                 break;
             }
-            tokio::time::sleep(Duration::from_millis(40)).await;
+            tokio::time::sleep(Duration::from_millis(20)).await;
         }
         if cancelled {
             // abort_tx already cleared tx_state and dropped PTT — nothing

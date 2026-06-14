@@ -1,6 +1,6 @@
 <script lang="ts">
   import { onMount, onDestroy } from "svelte";
-  import { onRtty, scpContainsAny } from "$lib/tci";
+  import { onRtty, onTxEcho, scpContainsAny } from "$lib/tci";
   import { rttyConfig } from "$lib/rttyConfig.svelte";
   import { cluster } from "$lib/cluster.svelte";
   import TuningScope from "$lib/TuningScope.svelte";
@@ -8,11 +8,16 @@
   // Cap the total characters retained to keep DOM fast.
   const MAX_CHARS = 8000;
 
-  let text = $state("");
+  // The decoder window is a sequence of runs so received and transmitted
+  // text can be colored differently while sharing one scrollback. TX runs
+  // are echoed live as our own signal goes on the air.
+  type Run = { tx: boolean; s: string };
+  let runs = $state<Run[]>([]);
   let autoScroll = $state(true);
   let filterNoise = $state(true);
   let scrollEl: HTMLDivElement | undefined;
   let unlisten: (() => void) | null = null;
+  let unlistenTx: (() => void) | null = null;
 
   const SHIFT_PRESETS = [170, 200, 425, 850];
   const BAUD_PRESETS = [45.45, 50, 75, 100];
@@ -33,10 +38,26 @@
   // Callsign shapes — kept liberal; SCP confirms membership.
   const CALL_RE = /^([A-Z0-9]{1,3}\/)?[A-Z]{1,2}\d{1,3}[A-Z]{1,4}(\/[A-Z0-9]{1,3})?$/;
 
-  function appendText(s: string) {
-    text = text + s;
-    if (text.length > MAX_CHARS) {
-      text = text.slice(-MAX_CHARS);
+  function appendText(s: string, tx = false) {
+    // Coalesce into the trailing run when the kind matches, so a long RX
+    // stream doesn't fragment into thousands of spans.
+    const last = runs[runs.length - 1];
+    if (last && last.tx === tx) {
+      last.s += s;
+    } else {
+      runs.push({ tx, s });
+    }
+    // Trim oldest runs to keep the total retained characters bounded.
+    let total = runs.reduce((n, r) => n + r.s.length, 0);
+    while (total > MAX_CHARS && runs.length > 0) {
+      const over = total - MAX_CHARS;
+      if (runs[0].s.length <= over) {
+        total -= runs[0].s.length;
+        runs.shift();
+      } else {
+        runs[0].s = runs[0].s.slice(over);
+        total -= over;
+      }
     }
     if (autoScroll) {
       queueMicrotask(() => {
@@ -147,14 +168,17 @@
   onMount(async () => {
     await rttyConfig.load();
     unlisten = await onRtty(appendChunk);
+    // TX echo bypasses the noise filter — it's our own text, always shown.
+    unlistenTx = await onTxEcho((c) => appendText(c, true));
   });
 
   onDestroy(() => {
     unlisten?.();
+    unlistenTx?.();
   });
 
   function clear() {
-    text = "";
+    runs = [];
     lineBuf = "";
   }
 </script>
@@ -220,7 +244,9 @@
   </header>
   <div class="rx-body">
     <TuningScope />
-    <div class="rx-text" bind:this={scrollEl}>{text || " "}</div>
+    <div class="rx-text" bind:this={scrollEl}
+      >{#each runs as run}<span class:tx={run.tx}>{run.s}</span>{/each}{#if runs.length === 0}{" "}{/if}</div
+    >
   </div>
 </section>
 
@@ -357,5 +383,11 @@
     line-height: 1.5;
     white-space: pre-wrap;
     word-break: break-word;
+  }
+
+  /* Transmitted text echoed live as it goes on the air. */
+  .rx-text .tx {
+    color: #ff9e64;
+    font-weight: 600;
   }
 </style>

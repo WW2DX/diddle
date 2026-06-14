@@ -39,6 +39,11 @@ pub struct RttyTxGenerator {
     current_bit: bool,
 
     figs: bool,
+
+    // Running count of bits appended to the queue over the generator's life.
+    // Used to time the per-character TX echo: a character's audio begins at
+    // bit index `bits_appended` (just before its data frame is queued).
+    bits_appended: usize,
 }
 
 impl RttyTxGenerator {
@@ -54,6 +59,7 @@ impl RttyTxGenerator {
             samples_in_current_bit: 0.0,
             current_bit: true, // start in mark (idle)
             figs: false,
+            bits_appended: 0,
         }
     }
 
@@ -63,6 +69,44 @@ impl RttyTxGenerator {
         for c in text.chars() {
             self.encode_char(c);
         }
+    }
+
+    /// Like [`enqueue`], but also returns a timeline of `(bit_index, char)`
+    /// marks — one per character actually queued — where `bit_index` is the
+    /// bit offset (from the start of this generator's output) at which the
+    /// character's own data frame begins. Any inserted LTRS/FIGS shift frame
+    /// is charged to the *following* character, and dropped characters
+    /// produce no mark, so the timeline stays aligned with the audio. Callers
+    /// convert bit index → sample offset via [`samples_per_bit`] to pace a
+    /// live TX echo in the UI.
+    pub fn enqueue_with_marks(&mut self, text: &str) -> Vec<(usize, char)> {
+        let mut marks = Vec::with_capacity(text.len());
+        for c in text.chars() {
+            let uc = c.to_ascii_uppercase();
+            if uc == '\n' {
+                marks.push((self.bits_appended, '\n'));
+                self.append_frame(8); // CR
+                self.append_frame(2); // LF
+                continue;
+            }
+            if let Some(code) = lookup_ltrs(uc) {
+                if self.figs {
+                    self.append_frame(LTRS_SHIFT);
+                    self.figs = false;
+                }
+                marks.push((self.bits_appended, uc));
+                self.append_frame(code);
+            } else if let Some(code) = lookup_figs(uc) {
+                if !self.figs {
+                    self.append_frame(FIGS_SHIFT);
+                    self.figs = true;
+                }
+                marks.push((self.bits_appended, uc));
+                self.append_frame(code);
+            }
+            // Else: char not in either table; drop it (and emit no mark).
+        }
+        marks
     }
 
     /// Drain the queue into the queue of bits (each char = start + 5 data +
@@ -105,6 +149,8 @@ impl RttyTxGenerator {
         // second. Simpler: push 2 mark bits and accept slightly long stops.
         self.bit_queue.push_back(true);
         self.bit_queue.push_back(true);
+        // 1 start + 5 data + 2 stop = 8 bits per frame.
+        self.bits_appended += 8;
     }
 
     /// Generate the next `n` audio samples. Phase is continuous between

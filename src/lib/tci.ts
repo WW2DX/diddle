@@ -77,6 +77,12 @@ export function onRtty(cb: (chunk: string) => void): Promise<UnlistenFn> {
   return listen<string>("rtty", (e) => cb(e.payload));
 }
 
+/// Fires once per character as our own RTTY transmission goes on the air,
+/// paced to the TX audio. Used to echo sent text into the decoder window.
+export function onTxEcho(cb: (chunk: string) => void): Promise<UnlistenFn> {
+  return listen<string>("tx:echo", (e) => cb(e.payload));
+}
+
 export interface ScopeFrame {
   xs: number[];
   ys: number[];

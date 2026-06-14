@@ -5,6 +5,9 @@ All notable changes to Diddle are documented here. Format loosely follows
 
 ## [Unreleased]
 
+### Added
+- Live TX echo: transmitted characters now appear in the decoder window as their tones go on the air (paced to the TX audio, shown in a distinct color), instead of only after the transmission completes.
+
 ## [0.1.0] — 2026-06-14
 
 Initial public release.
