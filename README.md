@@ -2,7 +2,7 @@
 
 **A RTTY contest logger — TCI-first, rate-focused.**
 
-Diddle is a desktop RTTY contest logger built around [TCI](https://github.com/maksimus1210/TCI) software-defined radios (ExpertSDR / SunSDR and compatibles). It decodes and transmits RTTY entirely in software, runs a multi-channel decoder across the whole waterfall, and is tuned for one thing: keeping your QSO rate high during a contest.
+Diddle is a desktop RTTY contest logger built around [TCI](https://github.com/maksimus1210/TCI) software-defined radios (ExpertSDR / SunSDR, [RemoteHamRadio](https://www.remotehamradio.com/), and compatibles). It decodes and transmits RTTY entirely in software, runs a multi-channel decoder across the whole waterfall, and is tuned for one thing: keeping your QSO rate high during a contest.
 
 > "Diddle" is the idle stream of LTRS a RTTY transmitter sends between characters to hold sync. Fitting name for a logger that lives in the RTTY sub-bands.
 
@@ -51,7 +51,7 @@ To build from source instead, see **[BUILD.md](BUILD.md)**.
 
 ## Quick start
 
-1. **Start your TCI radio software** (ExpertSDR2/3, SunSDR, etc.) and enable the **TCI server** (default `ws://localhost:40001`).
+1. **Start your TCI radio software** (ExpertSDR2/3, SunSDR, [RemoteHamRadio](https://www.remotehamradio.com/), etc.) and enable the **TCI server** (default `ws://localhost:40001`).
 2. **Launch Diddle**, type your TCI URL in the header, and click **Connect**. The frequency/mode readout should come alive.
 3. **Open Settings** (bottom panel) and fill in your operator info — callsign, name, state/province, CQ zone, grid — and pick your **contest**.
 4. **Tune to a RTTY signal.** The decoder view shows demodulated text; the waterfall shows callsign tags from the multi-decoder.
