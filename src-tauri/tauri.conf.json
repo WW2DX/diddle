@@ -1,0 +1,43 @@
+{
+  "$schema": "https://schema.tauri.app/config/2",
+  "productName": "Diddle",
+  "version": "0.1.0",
+  "identifier": "com.diddle.app",
+  "build": {
+    "beforeDevCommand": "npm run dev",
+    "devUrl": "http://localhost:1420",
+    "beforeBuildCommand": "npm run build",
+    "frontendDist": "../build"
+  },
+  "app": {
+    "windows": [
+      {
+        "title": "Diddle",
+        "width": 1400,
+        "height": 900,
+        "minWidth": 1024,
+        "minHeight": 700
+      }
+    ],
+    "security": {
+      "csp": null
+    }
+  },
+  "bundle": {
+    "active": true,
+    "targets": "all",
+    "publisher": "WW2DX",
+    "copyright": "Copyright © 2026 WW2DX",
+    "category": "Utility",
+    "homepage": "https://github.com/WW2DX/diddle",
+    "shortDescription": "RTTY contest logger — TCI-first, rate-focused",
+    "longDescription": "Diddle is a RTTY contest logger built around TCI software-defined radios. It decodes and transmits RTTY in software, runs a multi-channel decoder over the waterfall, and is tuned for high-rate contest operating with macros, Super Check Partial, DX cluster spots, contest profiles, and ADIF/Cabrillo export.",
+    "icon": [
+      "icons/32x32.png",
+      "icons/128x128.png",
+      "icons/128x128@2x.png",
+      "icons/icon.icns",
+      "icons/icon.ico"
+    ]
+  }
+}

@@ -1,0 +1,27 @@
+# Changelog
+
+All notable changes to Diddle are documented here. Format loosely follows
+[Keep a Changelog](https://keepachangelog.com/); versions follow [SemVer](https://semver.org/).
+
+## [Unreleased]
+
+## [0.1.0] — 2026-06-14
+
+Initial public release.
+
+### Added
+- TCI WebSocket client with live rig state and frequency/mode/PTT control.
+- Software RTTY demodulator (45.45 baud / 170 Hz shift, high tones) with ITA2/Baudot decode, AGC, and biquad pre-filtering.
+- Multi-decoder (up to 12 slots) with automatic callsign extraction and clickable waterfall tags.
+- Software RTTY transmit with editable F1–F8 macros and `<MYCALL>`/`<CALL>`/`<SERIAL>` substitution.
+- N1MM-style ESM (Enter Sends Message) entry workflow with in-line SCP autocomplete.
+- Persistent logbook with automatic serial numbering and band derivation.
+- Contest profiles: Generic RTTY, CQ WW RTTY, CQ WPX RTTY, ARRL RTTY Roundup, NAQP RTTY.
+- ADIF and Cabrillo 3.0 export.
+- Super Check Partial database with one-click MASTER.SCP auto-download.
+- DX cluster telnet client with bandmap, TTL-pruned spots, and click-to-QSY.
+- Spectrum waterfall, crossed-bananas tuning scope, and WAV player for offline decoder testing.
+- Cross-platform installers (macOS, Windows, Linux) built in CI.
+
+[Unreleased]: https://github.com/WW2DX/diddle/compare/v0.1.0...HEAD
+[0.1.0]: https://github.com/WW2DX/diddle/releases/tag/v0.1.0
