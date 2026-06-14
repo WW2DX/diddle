@@ -7,6 +7,7 @@ All notable changes to Diddle are documented here. Format loosely follows
 
 ### Added
 - Live TX echo: transmitted characters now appear in the decoder window as their tones go on the air (paced to the TX audio, shown in a distinct color), instead of only after the transmission completes.
+- Force the radio into DIGL on connect and before every transmit, so AFSK RTTY always lands on the expected sideband without the operator setting the mode by hand.
 
 ### Fixed
 - Real-time RX decode: with the noise filter on, decoded text now prints character-by-character as it arrives (with a live caret) instead of only appearing once a full CR/LF line completed. Completed lines are still scored and junk is dropped.

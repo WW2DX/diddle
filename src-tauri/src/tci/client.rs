@@ -34,6 +34,9 @@ const TX_CHRONO_TYPE: u32 = 3;
 const TX_FORMAT_F32: u32 = 4;
 // Stay below full scale so the radio's TX chain has headroom.
 const TX_AMPLITUDE: f32 = 0.6;
+// Sideband our AFSK RTTY tones assume. We force the radio into DIGL on
+// connect and before every transmit so the operator never has to set it.
+const RTTY_MODE: &str = "digl";
 
 /// Build a TCI TXAudioStream binary message from interleaved-stereo f32
 /// samples. Header is the standard 64-byte layout (7 u32 fields + reserved).
@@ -337,6 +340,9 @@ impl TciClient {
             waveform,
             position: 0,
         });
+        // Force DIGL right before keying so a mode change on the rig can't put
+        // us on the wrong sideband mid-contest.
+        self.force_rtty_mode().await;
         self.send("trx:0,true,vac;".to_string()).await?;
 
         // Wait until the chrono handler has streamed the whole waveform
@@ -408,6 +414,13 @@ impl TciClient {
     async fn set_state(&self, s: TciState) {
         *self.state.write().await = s.clone();
         let _ = self.app.emit("tci:state", &s);
+    }
+
+    /// Force the radio into DIGL — the sideband our AFSK RTTY tones assume.
+    /// Best-effort: a no-op if we're not connected. The radio echoes the
+    /// change back as a `modulation:0,digl` message, which updates rig state.
+    async fn force_rtty_mode(&self) {
+        let _ = self.send(format!("modulation:0,{};", RTTY_MODE)).await;
     }
 
     async fn emit_rig(&self) {
@@ -665,6 +678,8 @@ impl TciClient {
                 // separate "Start audio" click. WavPlayer will stop this
                 // explicitly when it kicks off offline playback.
                 let _ = self.send("audio_start:0;".to_string()).await;
+                // Force DIGL so AFSK RTTY lands on the expected sideband.
+                self.force_rtty_mode().await;
             }
             "vfo" if m.arg_u8(0) == Some(0) && m.arg_u8(1) == Some(0) => {
                 if let Some(hz) = m.arg_u64(2) {
