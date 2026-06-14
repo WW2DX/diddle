@@ -76,6 +76,6 @@ jobs:
           tagName: ${{ github.ref_name }}
           releaseName: "Diddle ${{ github.ref_name }}"
           releaseBody: "Diddle RTTY contest logger — see CHANGELOG.md for details. Installers for each OS are attached below."
-          releaseDraft: true
+          releaseDraft: false
           prerelease: false
           args: ${{ matrix.args }}
