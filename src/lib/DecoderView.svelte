@@ -66,48 +66,64 @@
     }
   }
 
-  // Line-buffered filter pipeline. We process completed lines (terminated
-  // by CR/LF) so we can score the whole line in context. A very long line
-  // with no break is force-flushed so we don't accumulate forever.
-  let lineBuf = "";
-  let processing = false;
+  // Noise filter pipeline. The in-progress line is shown live in `pendingLine`
+  // so decodes print character-by-character in real time. When a line
+  // completes (CR/LF, or it grows past the force-flush length) it's scored in
+  // context: kept lines are committed to the scrollback, junk is dropped.
+  let pendingLine = $state("");
+  let classifyQueue: string[] = [];
+  let classifying = false;
+
+  function scrollSoon() {
+    if (!autoScroll) return;
+    queueMicrotask(() => {
+      if (scrollEl) scrollEl.scrollTop = scrollEl.scrollHeight;
+    });
+  }
 
   async function appendChunk(chunk: string) {
     if (!filterNoise) {
+      // Filter off: stream straight to the scrollback, nothing held back.
+      if (pendingLine) {
+        appendText(pendingLine);
+        pendingLine = "";
+      }
       appendText(chunk);
       return;
     }
-    lineBuf += chunk;
-    if (processing) return;
-    processing = true;
-    try {
-      // Keep draining; new chunks may have arrived while we awaited.
-      while (await flushOneLine()) {
-        // loop
-      }
-    } finally {
-      processing = false;
+    pendingLine += chunk;
+    // Peel completed lines off the front synchronously so `pendingLine` only
+    // ever holds the live, not-yet-terminated text.
+    let idx: number;
+    while ((idx = pendingLine.search(/[\r\n]/)) >= 0) {
+      let n = 1;
+      while (idx + n < pendingLine.length && /[\r\n]/.test(pendingLine[idx + n])) n++;
+      classifyQueue.push(pendingLine.slice(0, idx));
+      pendingLine = pendingLine.slice(idx + n);
     }
+    // Force-finalize an over-long unterminated line so a station that never
+    // sends CR/LF still gets scored and committed.
+    if (pendingLine.length > 200) {
+      classifyQueue.push(pendingLine);
+      pendingLine = "";
+    }
+    scrollSoon();
+    drainClassify();
   }
 
-  /// Pull one complete line (or force-flush an over-long buffer) and run it
-  /// through the classifier. Returns true if more work *might* be pending.
-  async function flushOneLine(): Promise<boolean> {
-    const idx = lineBuf.search(/[\r\n]/);
-    if (idx < 0) {
-      if (lineBuf.length > 200) {
-        const line = lineBuf;
-        lineBuf = "";
-        await classifyAndEmit(line);
+  /// Classify queued completed lines in order. Async (SCP lookups) but
+  /// serialized so lines commit in the order they were received.
+  async function drainClassify() {
+    if (classifying) return;
+    classifying = true;
+    try {
+      while (classifyQueue.length > 0) {
+        const line = classifyQueue.shift()!;
+        if (line.trim().length > 0) await classifyAndEmit(line);
       }
-      return false;
+    } finally {
+      classifying = false;
     }
-    const line = lineBuf.slice(0, idx);
-    let n = 1;
-    while (idx + n < lineBuf.length && /[\r\n]/.test(lineBuf[idx + n])) n++;
-    lineBuf = lineBuf.slice(idx + n);
-    if (line.trim().length > 0) await classifyAndEmit(line);
-    return true;
   }
 
   async function classifyAndEmit(rawLine: string) {
@@ -179,7 +195,8 @@
 
   function clear() {
     runs = [];
-    lineBuf = "";
+    pendingLine = "";
+    classifyQueue = [];
   }
 </script>
 
@@ -245,7 +262,7 @@
   <div class="rx-body">
     <TuningScope />
     <div class="rx-text" bind:this={scrollEl}
-      >{#each runs as run}<span class:tx={run.tx}>{run.s}</span>{/each}{#if runs.length === 0}{" "}{/if}</div
+      >{#each runs as run}<span class:tx={run.tx}>{run.s}</span>{/each}{#if pendingLine}<span class="pending">{pendingLine}</span>{/if}{#if runs.length === 0 && !pendingLine}{" "}{/if}</div
     >
   </div>
 </section>
@@ -389,5 +406,18 @@
   .rx-text .tx {
     color: #ff9e64;
     font-weight: 600;
+  }
+
+  /* The in-progress decode line, shown live before it's scored/committed. */
+  .rx-text .pending::after {
+    content: "▋";
+    color: #4ade80;
+    margin-left: 1px;
+    animation: caret-blink 1s step-start infinite;
+  }
+  @keyframes caret-blink {
+    50% {
+      opacity: 0;
+    }
   }
 </style>

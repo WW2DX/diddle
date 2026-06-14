@@ -8,6 +8,9 @@ All notable changes to Diddle are documented here. Format loosely follows
 ### Added
 - Live TX echo: transmitted characters now appear in the decoder window as their tones go on the air (paced to the TX audio, shown in a distinct color), instead of only after the transmission completes.
 
+### Fixed
+- Real-time RX decode: with the noise filter on, decoded text now prints character-by-character as it arrives (with a live caret) instead of only appearing once a full CR/LF line completed. Completed lines are still scored and junk is dropped.
+
 ## [0.1.0] — 2026-06-14
 
 Initial public release.
