@@ -5,6 +5,8 @@ All notable changes to Diddle are documented here. Format loosely follows
 
 ## [Unreleased]
 
+## [0.1.1] — 2026-06-15
+
 ### Added
 - Live TX echo: transmitted characters now appear in the decoder window as their tones go on the air (paced to the TX audio, shown in a distinct color), instead of only after the transmission completes.
 - Force the radio into DIGL on connect and before every transmit, so AFSK RTTY always lands on the expected sideband without the operator setting the mode by hand.
@@ -30,5 +32,6 @@ Initial public release.
 - Spectrum waterfall, crossed-bananas tuning scope, and WAV player for offline decoder testing.
 - Cross-platform installers (macOS, Windows, Linux) built in CI.
 
-[Unreleased]: https://github.com/WW2DX/diddle/compare/v0.1.0...HEAD
+[Unreleased]: https://github.com/WW2DX/diddle/compare/v0.1.1...HEAD
+[0.1.1]: https://github.com/WW2DX/diddle/compare/v0.1.0...v0.1.1
 [0.1.0]: https://github.com/WW2DX/diddle/releases/tag/v0.1.0
