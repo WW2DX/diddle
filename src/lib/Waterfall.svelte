@@ -21,6 +21,19 @@
   let viewSpanHz = $state(3000);
   const SPAN_PRESETS = [3000, 6000, 12000, 24000];
 
+  // Scroll speed: emit one waterfall row every `framesPerRow` spectrum frames,
+  // peak-holding the frames in between so brief signals aren't lost when slowed.
+  // 1 = fastest (a row per frame); higher = slower scroll + cleaner image.
+  let framesPerRow = $state(2);
+  const SPEED_PRESETS: Array<{ n: number; label: string }> = [
+    { n: 1, label: "Fast" },
+    { n: 2, label: "Med" },
+    { n: 4, label: "Slow" },
+    { n: 8, label: "Slowest" },
+  ];
+  let rowAccum: Float32Array | null = null;
+  let rowFrameCount = 0;
+
   // Snap-to-peak: when clicking, find the strongest bin within ±SNAP_HZ
   // and set mark there. Makes click-to-tune pixel-forgiving.
   let snapToPeak = $state(true);
@@ -108,7 +121,19 @@
     return a;
   }
 
-  function renderRow(mags: number[]) {
+  // Peak-hold incoming frames into the pending row so slowing the scroll
+  // doesn't drop brief signals. Reset (to null) after each row is drawn.
+  function accumulateRow(mags: number[]) {
+    if (!rowAccum || rowAccum.length !== mags.length) {
+      rowAccum = Float32Array.from(mags);
+      return;
+    }
+    for (let i = 0; i < mags.length; i++) {
+      if (mags[i] > rowAccum[i]) rowAccum[i] = mags[i];
+    }
+  }
+
+  function renderRow(mags: ArrayLike<number>) {
     if (!ctx) return;
     ctx.drawImage(canvas, 0, 1, WIDTH, HEIGHT - 1, 0, 0, WIDTH, HEIGHT - 1);
     const row = ctx.createImageData(WIDTH, 1);
@@ -134,13 +159,38 @@
       fsum += db;
     }
 
-    // Map each canvas column → a visible bin (nearest-neighbour, no smoothing).
+    // Map each canvas column → the visible spectrum. When more bins than
+    // pixels (zoomed out) take the peak across the covered bins so narrow
+    // RTTY carriers aren't skipped; when more pixels than bins (zoomed in)
+    // linearly interpolate for a smooth image instead of blocky bars.
+    const colsPerBin = WIDTH / visBins;
+    const downsampling = colsPerBin < 1; // visBins > WIDTH
     for (let x = 0; x < WIDTH; x++) {
-      const bin = Math.min(visBins - 1, (x * visBins / WIDTH) | 0);
-      const db = mags[bin];
+      let db: number;
+      if (downsampling) {
+        const lo = ((x * visBins) / WIDTH) | 0;
+        let hi = (((x + 1) * visBins) / WIDTH) | 0;
+        if (hi <= lo) hi = lo + 1;
+        if (hi > visBins) hi = visBins;
+        let m = -Infinity;
+        for (let b = lo; b < hi; b++) if (mags[b] > m) m = mags[b];
+        db = m;
+      } else {
+        const center = ((x + 0.5) * visBins) / WIDTH - 0.5;
+        let i0 = center | 0;
+        if (i0 < 0) i0 = 0;
+        if (i0 > visBins - 1) i0 = visBins - 1;
+        const i1 = Math.min(visBins - 1, i0 + 1);
+        let frac = center - i0;
+        if (frac < 0) frac = 0;
+        db = mags[i0] + (mags[i1] - mags[i0]) * frac;
+      }
       let t = (db - dbMin) / range;
       if (t < 0) t = 0;
       else if (t > 1) t = 1;
+      // Smoothstep contrast — lifts mid-level detail and tames the extremes
+      // for a cleaner image than a raw linear map.
+      t = t * t * (3 - 2 * t);
       const idx = (t * 255) | 0;
       const o = idx << 2;
       const p = x << 2;
@@ -187,7 +237,15 @@
         }
         lastT = now;
         lastFrameAt = Date.now();
-        renderRow(f.mags_db);
+        // Advance the waterfall at the chosen speed, peak-holding the frames
+        // between rows so brief signals survive a slow scroll.
+        accumulateRow(f.mags_db);
+        rowFrameCount++;
+        if (rowFrameCount >= framesPerRow) {
+          renderRow(rowAccum ?? f.mags_db);
+          rowAccum = null;
+          rowFrameCount = 0;
+        }
         updateSmoothed(f.mags_db);
         // Recompute peaks ~5 Hz to keep UI cheap.
         peakSearchCounter++;
@@ -553,6 +611,19 @@
         <input type="checkbox" bind:checked={snapToPeak} />
         snap to peak
       </label>
+    </div>
+    <div class="span-buttons">
+      <span class="dim">speed:</span>
+      {#each SPEED_PRESETS as s}
+        <button
+          class="ghost span"
+          class:active={framesPerRow === s.n}
+          onclick={() => (framesPerRow = s.n)}
+          title="Waterfall scroll speed"
+        >
+          {s.label}
+        </button>
+      {/each}
     </div>
   </div>
 

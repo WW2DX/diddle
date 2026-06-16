@@ -5,6 +5,14 @@ All notable changes to Diddle are documented here. Format loosely follows
 
 ## [Unreleased]
 
+### Added
+- Search & Pounce ESM mode alongside Run. A RUN/S&P toggle in the entry header switches the Enter-key stepping: S&P sends your call (F4), then your exchange (F2), then TU + log; Run is unchanged (CQ → exchange → TU + log). The mode is persisted, and the ESM chip shows what Enter will do in the current mode.
+- General QSO (ragchew) contest profile for non-contest operating — the received exchange is optional, so you can log a contact with just a callsign.
+- Waterfall scroll-speed control (Fast/Med/Slow/Slowest). Slower speeds peak-hold the frames between rows so brief signals aren't lost.
+
+### Changed
+- Waterfall rendering quality: columns now peak-aggregate when zoomed out (so narrow RTTY carriers aren't skipped) and linearly interpolate when zoomed in (smooth image instead of blocky bars), with a smoothstep contrast curve for cleaner separation of signal from noise.
+
 ## [0.1.2] — 2026-06-16
 
 ### Added

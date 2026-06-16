@@ -12,9 +12,22 @@ export interface ContestProfile {
   exchangeFormat: string; // shown in UI as "RST + CQ Zone"
   rcvdPlaceholder: string; // placeholder for the entry exch input
   buildSent: (serial: number) => string;
+  // When false, the received exchange is optional — used by the General QSO
+  // (ragchew) profile so you can log a contact with just a callsign. Treated
+  // as true when omitted.
+  requiresExchange?: boolean;
 }
 
 export const CONTESTS: ContestProfile[] = [
+  {
+    id: "qso",
+    name: "General QSO (ragchew)",
+    cabrilloName: "",
+    exchangeFormat: "RST / name / QTH (optional)",
+    rcvdPlaceholder: "RST NAME QTH",
+    requiresExchange: false,
+    buildSent: () => `599${settings.myName ? " " + settings.myName : ""}`,
+  },
   {
     id: "generic",
     name: "Generic RTTY (RST + Serial)",

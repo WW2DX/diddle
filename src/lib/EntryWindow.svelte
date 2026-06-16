@@ -15,12 +15,19 @@
   let call = $state("");
   let rstRcvd = $state("599");
   let exchRcvd = $state("");
+  // Whether we've already sent our exchange to this station. Lets ESM advance
+  // to the log step even when the received exchange is optional (S&P, or the
+  // General QSO profile). Reset whenever we move on to a new callsign.
+  let exchSent = $state(false);
 
   let contest = $derived(activeContest());
+  let needsExch = $derived(contest.requiresExchange !== false);
   let sentString = $derived(contest.buildSent(qsoLog.nextSerial));
   let band = $derived(bandFromHz(rig.freq));
   let dupe = $derived(call.length >= 3 && qsoLog.isDupe(call, band));
-  let canLog = $derived(call.length >= 3 && exchRcvd.length > 0);
+  let canLog = $derived(
+    call.length >= 3 && (!needsExch || exchRcvd.length > 0),
+  );
 
   // SCP suggestions — debounced as the user types in the call field.
   let suggestions = $state<string[]>([]);
@@ -51,20 +58,48 @@
     queueMicrotask(() => exchInput?.focus());
   }
 
-  // ESM (Enter Sends Message) — N1MM-style stepped Enter behavior in Run
-  // mode:
-  //   - empty form              →  fire F1 (CQ)
-  //   - call entered, no exch   →  fire F2 (Excg) and jump to Exch
-  //   - both filled             →  fire F3 (TU) and log the QSO
-  // Wired to F-keys (not labels) so renaming a macro label in Settings
-  // doesn't break Enter.
+  // ESM (Enter Sends Message) — N1MM-style stepped Enter. The steps differ
+  // between Run (you're calling CQ) and Search & Pounce (you're answering
+  // someone else's CQ). Wired to F-keys (not labels) so renaming a macro
+  // label in Settings doesn't break Enter.
+  //
+  //   Run:   empty → F1 (CQ)
+  //          call  → F2 (send exchange) + focus Exch
+  //          +exch → F3 (TU) + log
+  //
+  //   S&P:   call, no exch → F4 (send our call) + focus Exch
+  //          call + exch   → F2 (send our exchange)
+  //          (again)       → F3 (TU) + log
   async function esmEnter() {
     const c = normalizeCall(call);
     const ex = exchRcvd.trim();
+
+    if (settings.spMode) {
+      // Search & Pounce — nothing to send until we've grabbed a call.
+      if (c.length === 0) return;
+      if (!exchSent && ex.length === 0) {
+        await macroState.fire("F4", { call: c }); // "DE <MYCALL>"
+        queueMicrotask(() => exchInput?.focus());
+      } else if (!exchSent) {
+        await macroState.fire("F2", { call: c }); // our exchange
+        exchSent = true;
+      } else {
+        await macroState.fire("F3"); // TU
+        logQso();
+      }
+      return;
+    }
+
+    // Run.
     if (c.length === 0) {
       await macroState.fire("F1");
-    } else if (ex.length === 0) {
+    } else if (needsExch && ex.length === 0) {
       await macroState.fire("F2", { call: c });
+      queueMicrotask(() => exchInput?.focus());
+    } else if (!needsExch && !exchSent) {
+      // Ragchew: send our info, then a second Enter logs (exch optional).
+      await macroState.fire("F2", { call: c });
+      exchSent = true;
       queueMicrotask(() => exchInput?.focus());
     } else {
       await macroState.fire("F3");
@@ -74,10 +109,20 @@
 
   // The phase label shown next to the entry fields so the operator knows
   // what Enter will do.
-  let esmPhase = $derived.by<"cq" | "excg" | "tu">(() => {
-    if (call.length === 0) return "cq";
-    if (exchRcvd.length === 0) return "excg";
-    return "tu";
+  type Phase = { cls: "cq" | "excg" | "tu" | "idle"; label: string };
+  let esmPhase = $derived.by<Phase>(() => {
+    const hasCall = call.trim().length > 0;
+    const hasExch = exchRcvd.trim().length > 0;
+    if (settings.spMode) {
+      if (!hasCall) return { cls: "idle", label: "S&P · grab a call" };
+      if (!exchSent && !hasExch) return { cls: "cq", label: "S&P · ↵ Call" };
+      if (!exchSent) return { cls: "excg", label: "S&P · ↵ Excg" };
+      return { cls: "tu", label: "S&P · ↵ TU+Log" };
+    }
+    if (!hasCall) return { cls: "cq", label: "Run · ↵ CQ" };
+    if (needsExch && !hasExch) return { cls: "excg", label: "Run · ↵ Excg" };
+    if (!needsExch && !exchSent) return { cls: "excg", label: "Run · ↵ Excg" };
+    return { cls: "tu", label: "Run · ↵ TU+Log" };
   });
 
   function normalizeCall(s: string): string {
@@ -89,7 +134,8 @@
 
   function logQso() {
     const c = normalizeCall(call);
-    if (!c || !exchRcvd) return;
+    if (!c) return;
+    if (needsExch && !exchRcvd) return;
     // Build the sent exchange via the active contest's formatter (e.g.
     // serial+zone for CQ WW; name+state for NAQP). Store both the legible
     // sent string and the raw rcvd string so exports can re-format.
@@ -110,6 +156,7 @@
     call = "";
     exchRcvd = "";
     rstRcvd = "599";
+    exchSent = false;
     queueMicrotask(() => callInput?.focus());
   }
 
@@ -117,12 +164,15 @@
     call = "";
     exchRcvd = "";
     rstRcvd = "599";
+    exchSent = false;
     callInput?.focus();
   }
 
   function onCallInput(e: Event) {
     const t = e.target as HTMLInputElement;
     call = normalizeCall(t.value);
+    // Editing the callsign means a new station — restart the ESM sequence.
+    exchSent = false;
     refreshSuggestions(call);
   }
 
@@ -184,9 +234,18 @@
       <span class="num">{fmtMhz(rig.freq)}</span>
       <span class="dim">mode</span>
       <span class="num">{(rig.mode || "—").toUpperCase()}</span>
+      <button
+        type="button"
+        class="sp-toggle"
+        class:sp={settings.spMode}
+        onclick={() => settings.toggleSpMode()}
+        title="Toggle Run / Search & Pounce (ESM behavior)"
+      >
+        {settings.spMode ? "S&P" : "RUN"}
+      </button>
       {#if settings.esm}
-        <span class="esm-chip esm-{esmPhase}">
-          ESM · {esmPhase === "cq" ? "↵ CQ" : esmPhase === "excg" ? "↵ Excg" : "↵ TU+Log"}
+        <span class="esm-chip esm-{esmPhase.cls}">
+          {esmPhase.label}
         </span>
       {/if}
       {#if dupe}
@@ -321,6 +380,31 @@
   .esm-cq   { background: #2a3f5f; color: #92c5fa; border: 1px solid #3a5a8a; }
   .esm-excg { background: #5f4f2a; color: #fbbf24; border: 1px solid #8a6a3a; }
   .esm-tu   { background: #2a5a3f; color: #a0d8b8; border: 1px solid #3a8a5f; }
+  .esm-idle { background: #23282d; color: #8a949d; border: 1px solid #3a4452; }
+
+  .sp-toggle {
+    font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 0.5px;
+    padding: 2px 8px;
+    border-radius: 3px;
+    cursor: pointer;
+    margin-left: 4px;
+    /* Run (default) */
+    background: #2a3f5f;
+    color: #92c5fa;
+    border: 1px solid #3a5a8a;
+  }
+  .sp-toggle.sp {
+    /* Search & Pounce */
+    background: #5a2a4f;
+    color: #f0a8d8;
+    border: 1px solid #8a3a7a;
+  }
+  .sp-toggle:hover {
+    filter: brightness(1.2);
+  }
 
   .row {
     display: flex;

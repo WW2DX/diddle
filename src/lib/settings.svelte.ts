@@ -15,6 +15,7 @@ interface Stored {
   clusterHost?: string;
   clusterPort?: number;
   esm?: boolean;
+  spMode?: boolean; // false = Run, true = Search & Pounce
   decodeHistoryLines?: number;
 }
 
@@ -35,6 +36,7 @@ class Settings {
   clusterHost = $state<string>("dxc.k1ttt.net");
   clusterPort = $state<number>(7373);
   esm = $state<boolean>(true);
+  spMode = $state<boolean>(false);
   decodeHistoryLines = $state<number>(HISTORY_DEFAULT);
   loaded = $state(false);
 
@@ -53,6 +55,7 @@ class Settings {
         if (obj.clusterHost) this.clusterHost = obj.clusterHost;
         if (obj.clusterPort) this.clusterPort = obj.clusterPort;
         if (obj.esm !== undefined) this.esm = obj.esm;
+        if (obj.spMode !== undefined) this.spMode = obj.spMode;
         if (obj.decodeHistoryLines !== undefined) {
           this.decodeHistoryLines = this.clampHistory(obj.decodeHistoryLines);
         }
@@ -78,6 +81,7 @@ class Settings {
           clusterHost: this.clusterHost,
           clusterPort: this.clusterPort,
           esm: this.esm,
+          spMode: this.spMode,
           decodeHistoryLines: this.decodeHistoryLines,
         } satisfies Stored),
       );
@@ -134,6 +138,13 @@ class Settings {
   setEsm(v: boolean) {
     this.esm = v;
     this.save();
+  }
+  setSpMode(v: boolean) {
+    this.spMode = v;
+    this.save();
+  }
+  toggleSpMode() {
+    this.setSpMode(!this.spMode);
   }
 
   private clampHistory(v: number): number {
