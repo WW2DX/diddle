@@ -5,6 +5,10 @@ All notable changes to Diddle are documented here. Format loosely follows
 
 ## [Unreleased]
 
+### Added
+- Scrollable decode history: the RX window keeps decoded text as it scrolls off, with a resizable pane (drag the bottom edge) and a scrollbar to read back. Scrolling up pauses auto-scroll and shows a "↓ latest" button; returning to the bottom resumes it.
+- Configurable decode history length (in lines) — set how many decoded lines are retained before the oldest scroll off for good. Persisted across sessions; defaults to 1000 lines.
+
 ## [0.1.1] — 2026-06-15
 
 ### Added

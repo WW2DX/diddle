@@ -15,7 +15,14 @@ interface Stored {
   clusterHost?: string;
   clusterPort?: number;
   esm?: boolean;
+  decodeHistoryLines?: number;
 }
+
+// Bounds for how many decoded lines the RX window keeps before old lines
+// scroll off for good.
+export const HISTORY_MIN = 100;
+export const HISTORY_MAX = 50_000;
+export const HISTORY_DEFAULT = 1000;
 
 class Settings {
   myCall = $state<string>("");
@@ -28,6 +35,7 @@ class Settings {
   clusterHost = $state<string>("dxc.k1ttt.net");
   clusterPort = $state<number>(7373);
   esm = $state<boolean>(true);
+  decodeHistoryLines = $state<number>(HISTORY_DEFAULT);
   loaded = $state(false);
 
   load() {
@@ -45,6 +53,9 @@ class Settings {
         if (obj.clusterHost) this.clusterHost = obj.clusterHost;
         if (obj.clusterPort) this.clusterPort = obj.clusterPort;
         if (obj.esm !== undefined) this.esm = obj.esm;
+        if (obj.decodeHistoryLines !== undefined) {
+          this.decodeHistoryLines = this.clampHistory(obj.decodeHistoryLines);
+        }
       }
     } catch (e) {
       console.error("settings.load failed", e);
@@ -67,6 +78,7 @@ class Settings {
           clusterHost: this.clusterHost,
           clusterPort: this.clusterPort,
           esm: this.esm,
+          decodeHistoryLines: this.decodeHistoryLines,
         } satisfies Stored),
       );
     } catch (e) {
@@ -121,6 +133,16 @@ class Settings {
   }
   setEsm(v: boolean) {
     this.esm = v;
+    this.save();
+  }
+
+  private clampHistory(v: number): number {
+    if (!Number.isFinite(v)) return HISTORY_DEFAULT;
+    return Math.min(HISTORY_MAX, Math.max(HISTORY_MIN, Math.round(v)));
+  }
+
+  setDecodeHistoryLines(v: number) {
+    this.decodeHistoryLines = this.clampHistory(v);
     this.save();
   }
 }

@@ -3,16 +3,21 @@
   import { onRtty, onTxEcho, scpContainsAny } from "$lib/tci";
   import { rttyConfig } from "$lib/rttyConfig.svelte";
   import { cluster } from "$lib/cluster.svelte";
+  import { settings, HISTORY_MIN, HISTORY_MAX } from "$lib/settings.svelte";
   import TuningScope from "$lib/TuningScope.svelte";
 
-  // Cap the total characters retained to keep DOM fast.
-  const MAX_CHARS = 8000;
+  // Hard safety ceiling on retained characters, independent of the line-based
+  // history setting — guards against a station that never sends a line break.
+  const HARD_CHAR_CAP = 2_000_000;
 
   // The decoder window is a sequence of runs so received and transmitted
   // text can be colored differently while sharing one scrollback. TX runs
   // are echoed live as our own signal goes on the air.
   type Run = { tx: boolean; s: string };
   let runs = $state<Run[]>([]);
+  // Whether new content sticks the view to the bottom. Flipped off when the
+  // operator scrolls up to read back, and on again when they return to the
+  // bottom — so scrollback isn't yanked away mid-read.
   let autoScroll = $state(true);
   let filterNoise = $state(true);
   let scrollEl: HTMLDivElement | undefined;
@@ -47,10 +52,45 @@
     } else {
       runs.push({ tx, s });
     }
-    // Trim oldest runs to keep the total retained characters bounded.
+    trimHistory();
+    if (autoScroll) {
+      queueMicrotask(() => {
+        if (scrollEl) scrollEl.scrollTop = scrollEl.scrollHeight;
+      });
+    }
+  }
+
+  /// Drop the oldest lines once the retained history exceeds the operator's
+  /// line budget. A "line" is a newline-terminated run of text; the live,
+  /// unterminated tail (`pendingLine`) is not counted. A hard character cap
+  /// is also enforced as a backstop.
+  function trimHistory() {
+    const maxLines = settings.decodeHistoryLines;
+    let lines = 0;
+    for (const r of runs) {
+      for (let i = 0; i < r.s.length; i++) {
+        if (r.s.charCodeAt(i) === 10) lines++;
+      }
+    }
+    // Drop whole leading lines until we're within the line budget.
+    let dropLines = lines - maxLines;
+    while (dropLines > 0 && runs.length > 0) {
+      const r = runs[0];
+      const nl = r.s.indexOf("\n");
+      if (nl === -1) {
+        // Partial head of the oldest line — its terminating newline is in a
+        // later run; discard this fragment and keep going.
+        runs.shift();
+        continue;
+      }
+      r.s = r.s.slice(nl + 1);
+      dropLines--;
+      if (r.s.length === 0) runs.shift();
+    }
+    // Backstop: never let a newline-less stream grow without bound.
     let total = runs.reduce((n, r) => n + r.s.length, 0);
-    while (total > MAX_CHARS && runs.length > 0) {
-      const over = total - MAX_CHARS;
+    while (total > HARD_CHAR_CAP && runs.length > 0) {
+      const over = total - HARD_CHAR_CAP;
       if (runs[0].s.length <= over) {
         total -= runs[0].s.length;
         runs.shift();
@@ -59,11 +99,20 @@
         total -= over;
       }
     }
-    if (autoScroll) {
-      queueMicrotask(() => {
-        if (scrollEl) scrollEl.scrollTop = scrollEl.scrollHeight;
-      });
-    }
+  }
+
+  /// Track whether the operator is parked at the bottom. Reading back up the
+  /// scrollback pauses auto-scroll; returning to the bottom resumes it.
+  function onScroll() {
+    if (!scrollEl) return;
+    const dist = scrollEl.scrollHeight - scrollEl.scrollTop - scrollEl.clientHeight;
+    autoScroll = dist < 8;
+  }
+
+  function jumpToBottom() {
+    if (!scrollEl) return;
+    scrollEl.scrollTop = scrollEl.scrollHeight;
+    autoScroll = true;
   }
 
   // Noise filter pipeline. The in-progress line is shown live in `pendingLine`
@@ -252,8 +301,31 @@
         <input type="checkbox" bind:checked={filterNoise} />
         filter noise
       </label>
-      <label>
-        <input type="checkbox" bind:checked={autoScroll} />
+      <label title="Number of decoded lines kept before the oldest scroll off for good">
+        history
+        <input
+          class="history-input"
+          type="number"
+          min={HISTORY_MIN}
+          max={HISTORY_MAX}
+          step="100"
+          value={settings.decodeHistoryLines}
+          onchange={(e) =>
+            settings.setDecodeHistoryLines(
+              (e.target as HTMLInputElement).valueAsNumber,
+            )}
+        />
+        lines
+      </label>
+      <label title="Keep the newest decodes pinned to the bottom; scrolling up pauses it">
+        <input
+          type="checkbox"
+          checked={autoScroll}
+          onchange={(e) =>
+            (e.target as HTMLInputElement).checked
+              ? jumpToBottom()
+              : (autoScroll = false)}
+        />
         auto-scroll
       </label>
       <button class="ghost" onclick={clear}>clear</button>
@@ -261,9 +333,16 @@
   </header>
   <div class="rx-body">
     <TuningScope />
-    <div class="rx-text" bind:this={scrollEl}
-      >{#each runs as run}<span class:tx={run.tx}>{run.s}</span>{/each}{#if pendingLine}<span class="pending">{pendingLine}</span>{/if}{#if runs.length === 0 && !pendingLine}{" "}{/if}</div
-    >
+    <div class="rx-wrap">
+      <div class="rx-text" bind:this={scrollEl} onscroll={onScroll}
+        >{#each runs as run}<span class:tx={run.tx}>{run.s}</span>{/each}{#if pendingLine}<span class="pending">{pendingLine}</span>{/if}{#if runs.length === 0 && !pendingLine}{" "}{/if}</div
+      >
+      {#if !autoScroll}
+        <button class="jump-btn" onclick={jumpToBottom} title="Jump to latest">
+          ↓ latest
+        </button>
+      {/if}
+    </div>
   </div>
 </section>
 
@@ -385,13 +464,22 @@
     align-items: stretch;
   }
 
-  .rx-text {
+  .rx-wrap {
     flex: 1;
+    position: relative;
+    min-width: 0;
+  }
+
+  .rx-text {
+    box-sizing: border-box;
+    width: 100%;
     background: #0c0e10;
     border: 1px solid #1f2429;
     border-radius: 4px;
-    min-height: 150px;
-    max-height: 220px;
+    height: 220px;
+    min-height: 120px;
+    /* Drag the bottom edge to read more of the scrollback at once. */
+    resize: vertical;
     overflow-y: auto;
     padding: 8px 12px;
     font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
@@ -400,6 +488,35 @@
     line-height: 1.5;
     white-space: pre-wrap;
     word-break: break-word;
+  }
+
+  .history-input {
+    width: 56px;
+    background: #0c0e10;
+    border: 1px solid #3a4452;
+    color: #e6e6e6;
+    border-radius: 3px;
+    padding: 1px 4px;
+    font-size: 11px;
+    font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  }
+
+  /* Shown only while scrolled up, to jump back to live decodes. */
+  .jump-btn {
+    position: absolute;
+    right: 12px;
+    bottom: 10px;
+    background: #2a3f5f;
+    border: 1px solid #4a90e2;
+    color: #e6e6e6;
+    padding: 3px 10px;
+    border-radius: 12px;
+    cursor: pointer;
+    font-size: 11px;
+    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.4);
+  }
+  .jump-btn:hover {
+    background: #35507a;
   }
 
   /* Transmitted text echoed live as it goes on the air. */
