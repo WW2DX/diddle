@@ -5,6 +5,7 @@
   import { scpSearch, type RigState } from "$lib/tci";
   import { settings } from "$lib/settings.svelte";
   import { macroState } from "$lib/macros.svelte";
+  import { entryBus } from "$lib/entry.svelte";
 
   let { rig }: { rig: RigState } = $props();
 
@@ -123,6 +124,24 @@
     if (needsExch && !hasExch) return { cls: "excg", label: "Run · ↵ Excg" };
     if (!needsExch && !exchSent) return { cls: "excg", label: "Run · ↵ Excg" };
     return { cls: "tu", label: "Run · ↵ TU+Log" };
+  });
+
+  // A callsign clicked in the decoder window (or another panel) lands here.
+  // Copy it into the Call field, restart the ESM sequence, and focus Exch so
+  // the next Enter answers/sends.
+  let lastBusToken = 0;
+  $effect(() => {
+    const t = entryBus.token;
+    if (t === lastBusToken) return;
+    lastBusToken = t;
+    const c = normalizeCall(entryBus.requestedCall);
+    if (!c) return;
+    call = c;
+    exchRcvd = "";
+    exchSent = false;
+    suggestions = [];
+    suggestionIdx = -1;
+    queueMicrotask(() => exchInput?.focus());
   });
 
   function normalizeCall(s: string): string {

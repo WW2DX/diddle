@@ -5,7 +5,10 @@ All notable changes to Diddle are documented here. Format loosely follows
 
 ## [Unreleased]
 
+## [0.1.3] — 2026-06-16
+
 ### Added
+- Click-to-log callsigns: decoded callsigns in the RX window are highlighted and clickable — clicking one loads it into the entry form's Call field (and focuses Exch), ready to work.
 - Search & Pounce ESM mode alongside Run. A RUN/S&P toggle in the entry header switches the Enter-key stepping: S&P sends your call (F4), then your exchange (F2), then TU + log; Run is unchanged (CQ → exchange → TU + log). The mode is persisted, and the ESM chip shows what Enter will do in the current mode.
 - General QSO (ragchew) contest profile for non-contest operating — the received exchange is optional, so you can log a contact with just a callsign.
 - Waterfall scroll-speed control (Fast/Med/Slow/Slowest). Slower speeds peak-hold the frames between rows so brief signals aren't lost.
@@ -46,7 +49,8 @@ Initial public release.
 - Spectrum waterfall, crossed-bananas tuning scope, and WAV player for offline decoder testing.
 - Cross-platform installers (macOS, Windows, Linux) built in CI.
 
-[Unreleased]: https://github.com/WW2DX/diddle/compare/v0.1.2...HEAD
+[Unreleased]: https://github.com/WW2DX/diddle/compare/v0.1.3...HEAD
+[0.1.3]: https://github.com/WW2DX/diddle/compare/v0.1.2...v0.1.3
 [0.1.2]: https://github.com/WW2DX/diddle/compare/v0.1.1...v0.1.2
 [0.1.1]: https://github.com/WW2DX/diddle/compare/v0.1.0...v0.1.1
 [0.1.0]: https://github.com/WW2DX/diddle/releases/tag/v0.1.0

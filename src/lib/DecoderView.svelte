@@ -4,6 +4,7 @@
   import { rttyConfig } from "$lib/rttyConfig.svelte";
   import { cluster } from "$lib/cluster.svelte";
   import { settings, HISTORY_MIN, HISTORY_MAX } from "$lib/settings.svelte";
+  import { entryBus } from "$lib/entry.svelte";
   import TuningScope from "$lib/TuningScope.svelte";
 
   // Hard safety ceiling on retained characters, independent of the line-based
@@ -12,8 +13,9 @@
 
   // The decoder window is a sequence of runs so received and transmitted
   // text can be colored differently while sharing one scrollback. TX runs
-  // are echoed live as our own signal goes on the air.
-  type Run = { tx: boolean; s: string };
+  // are echoed live as our own signal goes on the air. A run with `call` set
+  // is a decoded callsign — highlighted and clickable to load the entry form.
+  type Run = { tx: boolean; s: string; call?: string };
   let runs = $state<Run[]>([]);
   // Whether new content sticks the view to the bottom. Flipped off when the
   // operator scrolls up to read back, and on again when they return to the
@@ -43,21 +45,51 @@
   // Callsign shapes — kept liberal; SCP confirms membership.
   const CALL_RE = /^([A-Z0-9]{1,3}\/)?[A-Z]{1,2}\d{1,3}[A-Z]{1,4}(\/[A-Z0-9]{1,3})?$/;
 
-  function appendText(s: string, tx = false) {
-    // Coalesce into the trailing run when the kind matches, so a long RX
-    // stream doesn't fragment into thousands of spans.
+  // Coalesce plain text into the trailing run when the kind matches, so a
+  // long stream doesn't fragment into thousands of spans. Never merges into a
+  // callsign run (those stay standalone so they remain individually clickable).
+  function pushPlain(s: string, tx: boolean) {
     const last = runs[runs.length - 1];
-    if (last && last.tx === tx) {
+    if (last && last.tx === tx && !last.call) {
       last.s += s;
     } else {
       runs.push({ tx, s });
     }
+  }
+
+  function finishAppend() {
     trimHistory();
     if (autoScroll) {
       queueMicrotask(() => {
         if (scrollEl) scrollEl.scrollTop = scrollEl.scrollHeight;
       });
     }
+  }
+
+  function appendText(s: string, tx = false) {
+    pushPlain(s, tx);
+    finishAppend();
+  }
+
+  // Append a classified RX line, wrapping callsign-shaped tokens so they can
+  // be clicked into the entry form. Whitespace is preserved so the line reads
+  // exactly as decoded.
+  function appendRxLine(line: string) {
+    for (const part of line.split(/(\s+)/)) {
+      if (!part) continue;
+      const clean = part.replace(/[^A-Za-z0-9/]/g, "").toUpperCase();
+      if (clean.length >= 3 && CALL_RE.test(clean) && !MARKERS.has(clean)) {
+        runs.push({ tx: false, s: part, call: clean });
+      } else {
+        pushPlain(part, false);
+      }
+    }
+    pushPlain("\n", false);
+    finishAppend();
+  }
+
+  function pickCall(c: string) {
+    entryBus.setCall(c);
   }
 
   /// Drop the oldest lines once the retained history exceeds the operator's
@@ -195,7 +227,7 @@
     // Marker / grid hits — cheap, no IPC.
     for (const t of tokens) {
       if (MARKERS.has(t) || GRID_RE.test(t)) {
-        appendText(line + "\n");
+        appendRxLine(line);
         return;
       }
     }
@@ -206,7 +238,7 @@
     );
     for (const t of tokens) {
       if (clusterCalls.has(t)) {
-        appendText(line + "\n");
+        appendRxLine(line);
         return;
       }
     }
@@ -217,7 +249,7 @@
       try {
         const matched = await scpContainsAny(candidates);
         if (matched) {
-          appendText(line + "\n");
+          appendRxLine(line);
           return;
         }
       } catch (e) {
@@ -335,7 +367,7 @@
     <TuningScope />
     <div class="rx-wrap">
       <div class="rx-text" bind:this={scrollEl} onscroll={onScroll}
-        >{#each runs as run}<span class:tx={run.tx}>{run.s}</span>{/each}{#if pendingLine}<span class="pending">{pendingLine}</span>{/if}{#if runs.length === 0 && !pendingLine}{" "}{/if}</div
+        >{#each runs as run}{#if run.call}<button class="call-chip" title={`Load ${run.call} into the entry form`} onclick={() => pickCall(run.call!)}>{run.s}</button>{:else}<span class:tx={run.tx}>{run.s}</span>{/if}{/each}{#if pendingLine}<span class="pending">{pendingLine}</span>{/if}{#if runs.length === 0 && !pendingLine}{" "}{/if}</div
       >
       {#if !autoScroll}
         <button class="jump-btn" onclick={jumpToBottom} title="Jump to latest">
@@ -523,6 +555,26 @@
   .rx-text .tx {
     color: #ff9e64;
     font-weight: 600;
+  }
+
+  /* Decoded callsign — click to load it into the entry form. Rendered inline
+     so it flows with the surrounding monospaced text. */
+  .rx-text .call-chip {
+    display: inline;
+    font: inherit;
+    color: #7ef0a8;
+    background: rgba(74, 222, 128, 0.16);
+    border: none;
+    border-radius: 2px;
+    padding: 0 1px;
+    margin: 0;
+    cursor: pointer;
+  }
+  .rx-text .call-chip:hover,
+  .rx-text .call-chip:focus-visible {
+    background: #4ade80;
+    color: #07120a;
+    outline: none;
   }
 
   /* The in-progress decode line, shown live before it's scored/committed. */
