@@ -5,6 +5,8 @@ All notable changes to Diddle are documented here. Format loosely follows
 
 ## [Unreleased]
 
+## [0.1.2] — 2026-06-16
+
 ### Added
 - Scrollable decode history: the RX window keeps decoded text as it scrolls off, with a resizable pane (drag the bottom edge) and a scrollbar to read back. Scrolling up pauses auto-scroll and shows a "↓ latest" button; returning to the bottom resumes it.
 - Configurable decode history length (in lines) — set how many decoded lines are retained before the oldest scroll off for good. Persisted across sessions; defaults to 1000 lines.
@@ -36,6 +38,7 @@ Initial public release.
 - Spectrum waterfall, crossed-bananas tuning scope, and WAV player for offline decoder testing.
 - Cross-platform installers (macOS, Windows, Linux) built in CI.
 
-[Unreleased]: https://github.com/WW2DX/diddle/compare/v0.1.1...HEAD
+[Unreleased]: https://github.com/WW2DX/diddle/compare/v0.1.2...HEAD
+[0.1.2]: https://github.com/WW2DX/diddle/compare/v0.1.1...v0.1.2
 [0.1.1]: https://github.com/WW2DX/diddle/compare/v0.1.0...v0.1.1
 [0.1.0]: https://github.com/WW2DX/diddle/releases/tag/v0.1.0
