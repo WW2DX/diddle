@@ -5,6 +5,8 @@ All notable changes to Diddle are documented here. Format loosely follows
 
 ## [Unreleased]
 
+## [0.1.4] — 2026-06-17
+
 ### Fixed
 - Clickable callsigns now work everywhere in the decoder window — with the noise filter off and in transmitted (TX echo) text — not just in filtered RX lines. Callsigns are detected at render time across all displayed text.
 
@@ -52,7 +54,8 @@ Initial public release.
 - Spectrum waterfall, crossed-bananas tuning scope, and WAV player for offline decoder testing.
 - Cross-platform installers (macOS, Windows, Linux) built in CI.
 
-[Unreleased]: https://github.com/WW2DX/diddle/compare/v0.1.3...HEAD
+[Unreleased]: https://github.com/WW2DX/diddle/compare/v0.1.4...HEAD
+[0.1.4]: https://github.com/WW2DX/diddle/compare/v0.1.3...v0.1.4
 [0.1.3]: https://github.com/WW2DX/diddle/compare/v0.1.2...v0.1.3
 [0.1.2]: https://github.com/WW2DX/diddle/compare/v0.1.1...v0.1.2
 [0.1.1]: https://github.com/WW2DX/diddle/compare/v0.1.0...v0.1.1
