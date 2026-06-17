@@ -5,6 +5,9 @@ All notable changes to Diddle are documented here. Format loosely follows
 
 ## [Unreleased]
 
+### Fixed
+- Clickable callsigns now work everywhere in the decoder window — with the noise filter off and in transmitted (TX echo) text — not just in filtered RX lines. Callsigns are detected at render time across all displayed text.
+
 ## [0.1.3] — 2026-06-16
 
 ### Added

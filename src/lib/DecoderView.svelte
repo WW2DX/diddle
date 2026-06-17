@@ -13,9 +13,9 @@
 
   // The decoder window is a sequence of runs so received and transmitted
   // text can be colored differently while sharing one scrollback. TX runs
-  // are echoed live as our own signal goes on the air. A run with `call` set
-  // is a decoded callsign — highlighted and clickable to load the entry form.
-  type Run = { tx: boolean; s: string; call?: string };
+  // are echoed live as our own signal goes on the air. Callsigns inside any
+  // run are detected at render time and turned into clickable chips.
+  type Run = { tx: boolean; s: string };
   let runs = $state<Run[]>([]);
   // Whether new content sticks the view to the bottom. Flipped off when the
   // operator scrolls up to read back, and on again when they return to the
@@ -45,19 +45,15 @@
   // Callsign shapes — kept liberal; SCP confirms membership.
   const CALL_RE = /^([A-Z0-9]{1,3}\/)?[A-Z]{1,2}\d{1,3}[A-Z]{1,4}(\/[A-Z0-9]{1,3})?$/;
 
-  // Coalesce plain text into the trailing run when the kind matches, so a
-  // long stream doesn't fragment into thousands of spans. Never merges into a
-  // callsign run (those stay standalone so they remain individually clickable).
-  function pushPlain(s: string, tx: boolean) {
+  function appendText(s: string, tx = false) {
+    // Coalesce into the trailing run when the kind matches, so a long stream
+    // doesn't fragment into thousands of runs.
     const last = runs[runs.length - 1];
-    if (last && last.tx === tx && !last.call) {
+    if (last && last.tx === tx) {
       last.s += s;
     } else {
       runs.push({ tx, s });
     }
-  }
-
-  function finishAppend() {
     trimHistory();
     if (autoScroll) {
       queueMicrotask(() => {
@@ -66,31 +62,55 @@
     }
   }
 
-  function appendText(s: string, tx = false) {
-    pushPlain(s, tx);
-    finishAppend();
-  }
-
-  // Append a classified RX line, wrapping callsign-shaped tokens so they can
-  // be clicked into the entry form. Whitespace is preserved so the line reads
-  // exactly as decoded.
-  function appendRxLine(line: string) {
-    for (const part of line.split(/(\s+)/)) {
-      if (!part) continue;
-      const clean = part.replace(/[^A-Za-z0-9/]/g, "").toUpperCase();
-      if (clean.length >= 3 && CALL_RE.test(clean) && !MARKERS.has(clean)) {
-        runs.push({ tx: false, s: part, call: clean });
-      } else {
-        pushPlain(part, false);
-      }
-    }
-    pushPlain("\n", false);
-    finishAppend();
-  }
-
   function pickCall(c: string) {
     entryBus.setCall(c);
   }
+
+  // Render segments: the runs flattened and split around callsign-shaped
+  // tokens so every displayed call — RX (filtered or raw) and TX echo alike —
+  // becomes a clickable chip. Non-call text stays in large chunks so the DOM
+  // stays light. Recomputed only when the scrollback changes.
+  type Seg = { tx: boolean; s: string; call?: string };
+  const TOKEN_RE = /[A-Za-z0-9/]+/g;
+
+  function isCallToken(tok: string): boolean {
+    const c = tok.toUpperCase();
+    return c.length >= 3 && CALL_RE.test(c) && !MARKERS.has(c);
+  }
+
+  function buildSegments(rs: Run[]): Seg[] {
+    const segs: Seg[] = [];
+    let buf = "";
+    let bufTx = false;
+    const flush = () => {
+      if (buf) {
+        segs.push({ tx: bufTx, s: buf });
+        buf = "";
+      }
+    };
+    for (const run of rs) {
+      if (run.tx !== bufTx) {
+        flush();
+        bufTx = run.tx;
+      }
+      const s = run.s;
+      let last = 0;
+      let m: RegExpExecArray | null;
+      TOKEN_RE.lastIndex = 0;
+      while ((m = TOKEN_RE.exec(s)) !== null) {
+        if (!isCallToken(m[0])) continue;
+        buf += s.slice(last, m.index);
+        flush();
+        segs.push({ tx: bufTx, s: m[0], call: m[0].toUpperCase() });
+        last = m.index + m[0].length;
+      }
+      buf += s.slice(last);
+    }
+    flush();
+    return segs;
+  }
+
+  let segments = $derived(buildSegments(runs));
 
   /// Drop the oldest lines once the retained history exceeds the operator's
   /// line budget. A "line" is a newline-terminated run of text; the live,
@@ -227,7 +247,7 @@
     // Marker / grid hits — cheap, no IPC.
     for (const t of tokens) {
       if (MARKERS.has(t) || GRID_RE.test(t)) {
-        appendRxLine(line);
+        appendText(line + "\n");
         return;
       }
     }
@@ -238,7 +258,7 @@
     );
     for (const t of tokens) {
       if (clusterCalls.has(t)) {
-        appendRxLine(line);
+        appendText(line + "\n");
         return;
       }
     }
@@ -249,7 +269,7 @@
       try {
         const matched = await scpContainsAny(candidates);
         if (matched) {
-          appendRxLine(line);
+          appendText(line + "\n");
           return;
         }
       } catch (e) {
@@ -367,7 +387,7 @@
     <TuningScope />
     <div class="rx-wrap">
       <div class="rx-text" bind:this={scrollEl} onscroll={onScroll}
-        >{#each runs as run}{#if run.call}<button class="call-chip" title={`Load ${run.call} into the entry form`} onclick={() => pickCall(run.call!)}>{run.s}</button>{:else}<span class:tx={run.tx}>{run.s}</span>{/if}{/each}{#if pendingLine}<span class="pending">{pendingLine}</span>{/if}{#if runs.length === 0 && !pendingLine}{" "}{/if}</div
+        >{#each segments as seg}{#if seg.call}<button class="call-chip" class:tx={seg.tx} title={`Load ${seg.call} into the entry form`} onclick={() => pickCall(seg.call!)}>{seg.s}</button>{:else}<span class:tx={seg.tx}>{seg.s}</span>{/if}{/each}{#if pendingLine}<span class="pending">{pendingLine}</span>{/if}{#if segments.length === 0 && !pendingLine}{" "}{/if}</div
       >
       {#if !autoScroll}
         <button class="jump-btn" onclick={jumpToBottom} title="Jump to latest">
