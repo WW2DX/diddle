@@ -5,6 +5,8 @@ All notable changes to Diddle are documented here. Format loosely follows
 
 ## [Unreleased]
 
+## [0.1.5] — 2026-06-22
+
 ### Added
 - UI zoom: Cmd/Ctrl with +/−/0 (and Cmd/Ctrl + scroll) scales the whole interface so the essential panels fit a laptop screen. The zoom level is persisted.
 - Transmit indicator on the waterfall: while keyed, the mark/space markers turn red, the tone band is shaded, and a "● TX" flag shows — making it clear TX uses the same tones/orientation as RX.
@@ -64,7 +66,8 @@ Initial public release.
 - Spectrum waterfall, crossed-bananas tuning scope, and WAV player for offline decoder testing.
 - Cross-platform installers (macOS, Windows, Linux) built in CI.
 
-[Unreleased]: https://github.com/WW2DX/diddle/compare/v0.1.4...HEAD
+[Unreleased]: https://github.com/WW2DX/diddle/compare/v0.1.5...HEAD
+[0.1.5]: https://github.com/WW2DX/diddle/compare/v0.1.4...v0.1.5
 [0.1.4]: https://github.com/WW2DX/diddle/compare/v0.1.3...v0.1.4
 [0.1.3]: https://github.com/WW2DX/diddle/compare/v0.1.2...v0.1.3
 [0.1.2]: https://github.com/WW2DX/diddle/compare/v0.1.1...v0.1.2

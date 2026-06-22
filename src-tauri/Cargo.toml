@@ -1,6 +1,6 @@
 [package]
 name = "diddle"
-version = "0.1.4"
+version = "0.1.5"
 description = "RTTY contest logger — TCI-first, rate-focused"
 authors = ["lee@remotehamradio.com"]
 edition = "2021"
