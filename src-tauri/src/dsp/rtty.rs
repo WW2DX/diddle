@@ -8,8 +8,9 @@
 //   (where the matched-filter output peaks), confirm stop bit is mark.
 // - ITA2 (Baudot) decode with LTRS/FIGS shift state.
 //
-// Defaults: 45.45 baud, 170 Hz shift, "high tones" (mark=2125, space=2295)
-// — matches MMTTY's default USB AFSK tuning.
+// Defaults: 45.45 baud, 170 Hz shift, tones mark=2125, space=2295. Diddle
+// forces the radio into DIGL (LSB) on connect — the usual amateur-RTTY
+// sideband — so these decode upright with REVerse off.
 
 use std::f32::consts::TAU;
 use std::sync::atomic::{AtomicU64, Ordering};

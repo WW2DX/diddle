@@ -5,7 +5,17 @@ All notable changes to Diddle are documented here. Format loosely follows
 
 ## [Unreleased]
 
-## [0.1.4] — 2026-06-17
+### Added
+- UI zoom: Cmd/Ctrl with +/−/0 (and Cmd/Ctrl + scroll) scales the whole interface so the essential panels fit a laptop screen. The zoom level is persisted.
+- Transmit indicator on the waterfall: while keyed, the mark/space markers turn red, the tone band is shaded, and a "● TX" flag shows — making it clear TX uses the same tones/orientation as RX.
+
+### Changed
+- The noise filter now defaults **off**, so the decoder window shows the raw real-time stream as it arrives instead of only committing whole lines on CR/LF (which read as delayed, several-seconds-late bursts). Turn it on to show only lines with a known call/marker.
+- Clarified that Diddle uses **DIGL (LSB)** for RTTY (forced on connect) with REV off — corrected docs and the waterfall hint that previously implied USB.
+
+### Fixed
+- Clicking a waterfall callsign label or cluster spot now loads the call into the entry form (and QSYs), not just retunes.
+- `<CALL>` now expands in F-key macros even with ESM off — the entry form's current Call is shared so manually-fired macros resolve it.
 
 ### Fixed
 - Clickable callsigns now work everywhere in the decoder window — with the noise filter off and in transmitted (TX echo) text — not just in filtered RX lines. Callsigns are detected at render time across all displayed text.

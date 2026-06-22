@@ -4,6 +4,7 @@
   import { rttyConfig } from "$lib/rttyConfig.svelte";
   import { spots } from "$lib/spots.svelte";
   import { cluster } from "$lib/cluster.svelte";
+  import { entryBus } from "$lib/entry.svelte";
   import { bandFromHz } from "$lib/bands";
 
   // Canvas dimensions. Width matches the half-spectrum (fft_size/2).
@@ -271,6 +272,12 @@
       }),
     );
   });
+
+  // Click a spot/label: load its call into the entry form AND QSY onto it.
+  function pickSpot(call: string, abs_hz: number) {
+    if (call) entryBus.setCall(call);
+    qsyToAbs(abs_hz);
+  }
 
   // QSY to a clicked spot: retune the radio so the signal lands at the
   // user's preferred mark tone. In USB: vfo_new = signal_abs_hz - markHz.
@@ -629,7 +636,7 @@
 
   <div class="freq-axis">
     <span>{fmtMhz(rig.freq)}</span>
-    <span class="dim">click → set mark · USB → ↑{spanLabel(viewSpanHz)}</span>
+    <span class="dim">click → set mark · DIGL · span {spanLabel(viewSpanHz)}</span>
     <span>{fmtMhz(topFreqHz)}</span>
   </div>
 
@@ -658,22 +665,32 @@
         <button
           class="spot-label {o.source}"
           style="left: {pct}%"
-          onclick={() => qsyToAbs(o.abs_hz)}
-          title={`${o.source === "cluster" ? "cluster" : "decoded"} · ${o.call} · ${o.audio_hz.toFixed(0)} Hz · ${new Date(o.timestamp_ms).toLocaleTimeString()}${o.comment ? " · " + o.comment : ""}`}
+          onclick={() => pickSpot(o.call, o.abs_hz)}
+          title={`Click → load ${o.call} + QSY · ${o.source === "cluster" ? "cluster" : "decoded"} · ${o.audio_hz.toFixed(0)} Hz · ${new Date(o.timestamp_ms).toLocaleTimeString()}${o.comment ? " · " + o.comment : ""}`}
         >
           {o.call}
         </button>
       {/if}
     {/each}
     {#if markInView}
-      <div class="marker mark" style="left: {markPct}%">
+      <div class="marker mark" class:txing={rig.ptt} style="left: {markPct}%">
         <span class="label">M {rttyConfig.markHz.toFixed(0)}</span>
       </div>
     {/if}
     {#if spaceInView}
-      <div class="marker space" style="left: {spacePct}%">
+      <div class="marker space" class:txing={rig.ptt} style="left: {spacePct}%">
         <span class="label">S {rttyConfig.spaceHz.toFixed(0)}</span>
       </div>
+    {/if}
+    {#if rig.ptt}
+      <!-- TX uses the same mark/space tones as RX; shade that band + flag it. -->
+      {#if markInView || spaceInView}
+        <div
+          class="tx-band"
+          style="left: {Math.min(markPct, spacePct)}%; width: {Math.abs(markPct - spacePct)}%"
+        ></div>
+      {/if}
+      <div class="tx-flag">● TX</div>
     {/if}
   </div>
 </section>
@@ -849,6 +866,38 @@
   }
   .marker.mark { background: #4ade80; box-shadow: 0 0 4px #4ade80; }
   .marker.space { background: #fbbf24; box-shadow: 0 0 4px #fbbf24; }
+  /* During TX the same tones go out — flag the markers red so it's obvious. */
+  .marker.txing { background: #f87171; box-shadow: 0 0 6px #f87171; }
+
+  .tx-band {
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    background: rgba(248, 113, 113, 0.16);
+    border-left: 1px solid rgba(248, 113, 113, 0.5);
+    border-right: 1px solid rgba(248, 113, 113, 0.5);
+    pointer-events: none;
+  }
+  .tx-flag {
+    position: absolute;
+    top: 6px;
+    right: 8px;
+    background: #f87171;
+    color: #1a0606;
+    font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 1px;
+    padding: 2px 8px;
+    border-radius: 3px;
+    pointer-events: none;
+    animation: tx-pulse 0.8s infinite;
+  }
+  @keyframes tx-pulse {
+    50% {
+      opacity: 0.5;
+    }
+  }
 
   .marker .label {
     position: absolute;

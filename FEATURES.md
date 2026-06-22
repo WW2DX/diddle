@@ -13,7 +13,7 @@ A complete rundown of what Diddle does today, plus what's planned.
 
 - **Pure-software AFSK demodulator** written in Rust — two quadrature correlators (mark/space NCOs), matched-filter integration over one bit period, magnitude slicer, and an async-serial start/stop-bit state machine.
 - **ITA2 / Baudot decode** with LTRS/FIGS shift handling (fldigi-canonical table).
-- **Standard RTTY defaults** — 45.45 baud, 170 Hz shift, high tones (mark 2125 Hz / space 2295 Hz), matching MMTTY's default USB AFSK tuning. Tunable.
+- **Standard RTTY defaults** — 45.45 baud, 170 Hz shift, tones mark 2125 Hz / space 2295 Hz. Diddle forces the radio into **DIGL (LSB)** on connect, which is the usual sideband for amateur RTTY; keep **REV off**. Tones, shift, baud, and reverse are all tunable.
 - **AGC + biquad pre-filtering** for clean copy on weak/crowded signals.
 - **Decoder view** streams demodulated text as it arrives.
 

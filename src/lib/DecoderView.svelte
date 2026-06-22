@@ -20,8 +20,10 @@
   // Whether new content sticks the view to the bottom. Flipped off when the
   // operator scrolls up to read back, and on again when they return to the
   // bottom — so scrollback isn't yanked away mid-read.
+  // Default OFF: show the raw decoder stream as it arrives so the operator
+  // sees real-time copy. When on, only lines with a known call/marker survive.
   let autoScroll = $state(true);
-  let filterNoise = $state(true);
+  let filterNoise = $state(false);
   let scrollEl: HTMLDivElement | undefined;
   let unlisten: (() => void) | null = null;
   let unlistenTx: (() => void) | null = null;

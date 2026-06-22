@@ -57,6 +57,8 @@ To build from source instead, see **[BUILD.md](BUILD.md)**.
 4. **Tune to a RTTY signal.** The decoder view shows demodulated text; the waterfall shows callsign tags from the multi-decoder.
 5. **Work stations.** With **ESM** on, `Enter` steps through CQ → exchange → TU + log automatically.
 
+> **Sideband:** Diddle uses **DIGL (LSB)** for RTTY and forces the radio into it on connect — the standard amateur-RTTY sideband. Leave **REV off** for normal signals. (If you operate the opposite sideband, toggle REV in the RX decoder.) Resize the window with **Cmd/Ctrl +/−/0** to fit your screen.
+
 ---
 
 ## Operating workflow (ESM)

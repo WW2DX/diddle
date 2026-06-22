@@ -7,6 +7,7 @@
 import { transmit, txAbort } from "$lib/tci";
 import { settings } from "$lib/settings.svelte";
 import { qsoLog } from "$lib/qsoLog.svelte";
+import { entryBus } from "$lib/entry.svelte";
 
 export interface Macro {
   key: string; // "F1" etc. — slot identifier, not user-editable
@@ -93,9 +94,12 @@ class MacroState {
   }
 
   expand(template: string, ctx: { call?: string } = {}): string {
+    // Fall back to the entry window's live Call field so macros fired from the
+    // F-keys (ESM off, no per-QSO context) still resolve <CALL>.
+    const call = ctx.call || entryBus.currentCall || "";
     return template
       .replaceAll("<MYCALL>", settings.myCall || "MYCALL")
-      .replaceAll("<CALL>", ctx.call || "")
+      .replaceAll("<CALL>", call)
       .replaceAll("<SERIAL>", String(qsoLog.nextSerial).padStart(3, "0"));
   }
 

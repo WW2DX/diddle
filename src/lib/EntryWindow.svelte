@@ -126,6 +126,12 @@
     return { cls: "tu", label: "Run · ↵ TU+Log" };
   });
 
+  // Mirror the live Call field out to the shared bus so F-key macros (with no
+  // per-QSO context) can still expand <CALL>.
+  $effect(() => {
+    entryBus.currentCall = call;
+  });
+
   // A callsign clicked in the decoder window (or another panel) lands here.
   // Copy it into the Call field, restart the ESM sequence, and focus Exch so
   // the next Enter answers/sends.
