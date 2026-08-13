@@ -103,28 +103,37 @@ class MacroState {
       .replaceAll("<SERIAL>", String(qsoLog.nextSerial).padStart(3, "0"));
   }
 
+  /// Send arbitrary text (ad-hoc keyboard send). Runs the same token
+  /// expansion as macros and drives the shared txing/lastSent/lastError
+  /// state so the TX indicator and ESC-abort behave identically.
+  async send(text: string, ctx: { call?: string } = {}): Promise<void> {
+    if (this.txing) return;
+    const expanded = this.expand(text, ctx);
+    if (expanded.trim().length === 0) return;
+    this.lastError = null;
+    this.lastSent = expanded;
+    this.txing = true;
+    try {
+      await transmit(expanded);
+    } catch (e: any) {
+      this.lastError = String(e);
+      console.error("send failed", e);
+    } finally {
+      this.txing = false;
+    }
+  }
+
   /// Fire a macro by F-key (`F1`..) or label (`CQ`, `Excg`, ...). Prefer
   /// F-keys so renaming labels doesn't break ESM/Enter behavior.
   async fire(key: string, ctx: { call?: string } = {}): Promise<void> {
     if (this.txing) return;
     const m = this.macros.find((x) => x.key === key || x.label === key);
     if (!m) return;
-    const text = this.expand(m.text, ctx);
-    if (text.trim().length === 0) {
+    if (this.expand(m.text, ctx).trim().length === 0) {
       this.lastError = `macro ${m.key} (${m.label}) is empty — nothing to send`;
       return;
     }
-    this.lastError = null;
-    this.lastSent = text;
-    this.txing = true;
-    try {
-      await transmit(text);
-    } catch (e: any) {
-      this.lastError = String(e);
-      console.error("macro fire failed", e);
-    } finally {
-      this.txing = false;
-    }
+    await this.send(m.text, ctx);
   }
 
   /// Abort an in-flight transmission. Safe to call when not TXing.

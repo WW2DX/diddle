@@ -4,6 +4,7 @@
   import Waterfall from "$lib/Waterfall.svelte";
   import DecoderView from "$lib/DecoderView.svelte";
   import EntryWindow from "$lib/EntryWindow.svelte";
+  import AdHocSend from "$lib/AdHocSend.svelte";
   import FKeys from "$lib/FKeys.svelte";
   import Logbook from "$lib/Logbook.svelte";
   import CollapsiblePanel from "$lib/CollapsiblePanel.svelte";
@@ -90,6 +91,8 @@
     <SettingsPanel />
   </CollapsiblePanel>
 </main>
+
+<AdHocSend />
 
 <style>
   :global(:root) {

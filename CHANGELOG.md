@@ -5,6 +5,9 @@ All notable changes to Diddle are documented here. Format loosely follows
 
 ## [Unreleased]
 
+### Added
+- Ad-hoc keyboard send (WriteLog Alt-K / N1MM Ctrl-K style): Ctrl/Alt/Cmd-K opens a popup where you type free text and Enter transmits it. Macro tokens (`<MYCALL>`, `<CALL>`, `<SERIAL>`) expand, ↑/↓ recalls previous sends, ESC aborts an in-flight TX or closes the window. The window stays open for repeated sends.
+
 ## [0.1.5] — 2026-06-22
 
 ### Added
