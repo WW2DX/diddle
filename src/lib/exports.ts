@@ -48,6 +48,7 @@ export function toAdif(qsos: Qso[]): string {
     if (q.exchSent) parts.push(adifField("STX_STRING", q.exchSent));
     if (q.exchRcvd) parts.push(adifField("SRX_STRING", q.exchRcvd));
     parts.push(adifField("APP_DIDDLE_SERIAL", String(q.serialSent)));
+    if (q.note) parts.push(adifField("COMMENT", q.note));
     parts.push("<EOR>");
     lines.push(parts.join(" "));
   }

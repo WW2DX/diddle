@@ -242,11 +242,77 @@
       } else {
         clearForm();
       }
-    } else if (e.key === " " && (e.target as HTMLElement) === callInput) {
+    } else if (e.key === "Tab") {
+      // Tab / Shift+Tab cycle strictly within the entry fields
+      // (Call → RST → Exch → Call) instead of wandering off to buttons.
       e.preventDefault();
-      exchInput?.focus();
+      const order = [callInput, rstInput, exchInput];
+      const i = order.indexOf(e.target as HTMLInputElement);
+      const next = order[(i + (e.shiftKey ? order.length - 1 : 1)) % order.length];
+      next?.focus();
+      if (next === callInput) next?.select();
+    } else if (e.key === " ") {
+      // Space toggles between Call and Exch. From Exch it only jumps when
+      // the field is empty — exchanges like NAQP's "JOHN MA" need literal
+      // spaces once you've started typing (use Shift+Tab to get back then).
+      const t = e.target as HTMLElement;
+      if (t === callInput) {
+        e.preventDefault();
+        exchInput?.focus();
+      } else if (
+        t === rstInput ||
+        (t === exchInput && exchRcvd.trim().length === 0)
+      ) {
+        e.preventDefault();
+        callInput?.focus();
+        callInput?.select();
+      }
     }
   }
+
+  // Global entry shortcuts — active regardless of focus:
+  //   Ctrl/Alt+W  wipe the entry fields
+  //   Alt+U       toggle Run / S&P
+  //   Ctrl+D      delete the most recent QSO (press twice to confirm)
+  // e.code, not e.key, so macOS Alt dead-keys don't hide the shortcut.
+  // Cmd combos are left alone (Cmd+W/Q/D belong to the OS).
+  let pendingDelete = $state<{ id: string; call: string } | null>(null);
+  let pendingDeleteTimer: ReturnType<typeof setTimeout> | null = null;
+
+  function deleteLastQso() {
+    const last = qsoLog.qsos[qsoLog.qsos.length - 1];
+    if (pendingDeleteTimer) clearTimeout(pendingDeleteTimer);
+    if (!last) {
+      pendingDelete = null;
+      return;
+    }
+    if (pendingDelete?.id === last.id) {
+      qsoLog.remove(last.id);
+      pendingDelete = null;
+    } else {
+      pendingDelete = { id: last.id, call: last.call };
+      pendingDeleteTimer = setTimeout(() => (pendingDelete = null), 3000);
+    }
+  }
+
+  function onGlobalKey(e: KeyboardEvent) {
+    if (e.metaKey) return;
+    if (e.code === "KeyW" && (e.ctrlKey || e.altKey)) {
+      e.preventDefault();
+      clearForm();
+    } else if (e.code === "KeyU" && e.altKey && !e.ctrlKey) {
+      e.preventDefault();
+      settings.toggleSpMode();
+    } else if (e.code === "KeyD" && e.ctrlKey && !e.altKey) {
+      e.preventDefault();
+      deleteLastQso();
+    }
+  }
+
+  $effect(() => {
+    window.addEventListener("keydown", onGlobalKey);
+    return () => window.removeEventListener("keydown", onGlobalKey);
+  });
 </script>
 
 <section class="panel">
@@ -275,6 +341,9 @@
       {/if}
       {#if dupe}
         <span class="dupe-flag">DUPE</span>
+      {/if}
+      {#if pendingDelete}
+        <span class="del-pending">Ctrl+D again deletes {pendingDelete.call}</span>
       {/if}
     </div>
   </header>
@@ -391,6 +460,18 @@
     font-size: 11px;
     margin-left: 8px;
     letter-spacing: 1px;
+  }
+
+  .del-pending {
+    background: #4a1f1f;
+    border: 1px solid #f87171;
+    color: #f87171;
+    padding: 2px 8px;
+    border-radius: 3px;
+    font-weight: 600;
+    font-size: 11px;
+    margin-left: 8px;
+    white-space: nowrap;
   }
 
   .esm-chip {

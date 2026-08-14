@@ -39,6 +39,12 @@ class QsoLog {
 
   remove(id: string) {
     this.qsos = this.qsos.filter((q) => q.id !== id);
+    // Recompute so deleting the most recent QSO (Ctrl-D) frees its serial
+    // for the next contact instead of leaving a hole in the sequence.
+    this.nextSerial =
+      this.qsos.length > 0
+        ? Math.max(...this.qsos.map((q) => q.serialSent)) + 1
+        : 1;
     this.save();
   }
 

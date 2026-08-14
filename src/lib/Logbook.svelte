@@ -225,6 +225,9 @@
                   />
                 {:else}
                   {q.call}
+                  {#if q.note}
+                    <span class="note-mark" title={q.note}>✎</span>
+                  {/if}
                 {/if}
               </td>
               <td class="band">{q.band}</td>
@@ -402,6 +405,13 @@
     padding: 0 4px;
   }
   .del:hover { color: #f87171; }
+
+  .note-mark {
+    color: #fbbf24;
+    font-size: 11px;
+    margin-left: 4px;
+    cursor: help;
+  }
 
   .editable {
     cursor: text;

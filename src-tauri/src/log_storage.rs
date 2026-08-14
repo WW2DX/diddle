@@ -20,6 +20,9 @@ pub struct Qso {
     pub exch_sent: String,
     pub exch_rcvd: String,
     pub serial_sent: u32,
+    // Operator note (Ctrl-N). Absent on QSOs logged before the field existed.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub note: Option<String>,
 }
 
 fn log_path(app: &tauri::AppHandle) -> Result<PathBuf, String> {

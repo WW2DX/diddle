@@ -10,4 +10,5 @@ export interface Qso {
   exchSent: string;
   exchRcvd: string;
   serialSent: number;
+  note?: string;
 }

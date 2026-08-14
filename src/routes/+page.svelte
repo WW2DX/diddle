@@ -5,6 +5,7 @@
   import DecoderView from "$lib/DecoderView.svelte";
   import EntryWindow from "$lib/EntryWindow.svelte";
   import AdHocSend from "$lib/AdHocSend.svelte";
+  import QuickActions from "$lib/QuickActions.svelte";
   import FKeys from "$lib/FKeys.svelte";
   import Logbook from "$lib/Logbook.svelte";
   import CollapsiblePanel from "$lib/CollapsiblePanel.svelte";
@@ -93,6 +94,7 @@
 </main>
 
 <AdHocSend />
+<QuickActions />
 
 <style>
   :global(:root) {
