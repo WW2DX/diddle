@@ -5,6 +5,8 @@ All notable changes to Diddle are documented here. Format loosely follows
 
 ## [Unreleased]
 
+## [0.1.7] — 2026-08-14
+
 ### Added
 - Entry keyboard navigation: Space toggles between the Call and Exch fields (from Exch it jumps when the field is empty, and always from RST, so exchanges with literal spaces like NAQP's "JOHN MA" still type normally); Tab / Shift+Tab now cycle strictly within Call → RST → Exch instead of wandering off to buttons.
 - Log/entry shortcuts: Ctrl/Alt+W wipes the entry fields, Alt+U toggles Run / S&P, Ctrl+D deletes the most recent QSO (press twice within 3 s to confirm; its serial is freed for reuse), Ctrl+N attaches a note to a logged QSO (shown as ✎ in the log, exported as ADIF COMMENT), and Ctrl+Q quick-edits a logged callsign. In the note/edit popups ↑/↓ (or the shortcut again) steps back through earlier QSOs.
