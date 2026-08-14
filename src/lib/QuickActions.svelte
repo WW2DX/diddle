@@ -5,6 +5,7 @@
   // ↑/↓ steps back/forward through the log while either popup is open
   // (Ctrl+Q again also steps older, N1MM-style). Enter saves, Esc cancels.
   // Cmd combos are never claimed (Cmd+N/Q belong to the OS).
+  import { tick } from "svelte";
   import { qsoLog } from "$lib/qsoLog.svelte";
 
   type Mode = "note" | "edit";
@@ -33,13 +34,22 @@
     text = mode === "note" ? (q.note ?? "") : q.call;
   }
 
-  function step(d: number) {
+  // Cursor at the end, nothing selected — so a wrong character can be
+  // fixed with backspace/arrows instead of having to retype the whole call.
+  function focusCursorEnd() {
+    inputEl?.focus();
+    const n = inputEl?.value.length ?? 0;
+    inputEl?.setSelectionRange(n, n);
+  }
+
+  async function step(d: number) {
     const n = qsoLog.qsos.length;
     const next = Math.min(Math.max(idx + d, 0), n - 1);
     if (next === idx) return;
     idx = next;
     loadText();
-    inputEl?.select();
+    await tick(); // let the input's value update before placing the cursor
+    focusCursorEnd();
   }
 
   function commit() {
@@ -98,10 +108,7 @@
   });
 
   $effect(() => {
-    if (mode !== null) {
-      inputEl?.focus();
-      inputEl?.select();
-    }
+    if (mode !== null) focusCursorEnd();
   });
 </script>
 
