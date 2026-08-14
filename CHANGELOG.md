@@ -5,6 +5,11 @@ All notable changes to Diddle are documented here. Format loosely follows
 
 ## [Unreleased]
 
+## [0.1.8] — 2026-08-14
+
+### Fixed
+- The Ctrl+Q quick-edit popup now opens with the cursor at the end of the call (nothing pre-selected), so a single wrong character can be fixed with backspace/arrows instead of retyping the whole call.
+
 ## [0.1.7] — 2026-08-14
 
 ### Added
