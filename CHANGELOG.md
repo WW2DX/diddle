@@ -5,6 +5,23 @@ All notable changes to Diddle are documented here. Format loosely follows
 
 ## [Unreleased]
 
+### Added
+- DX cluster command line under the bandmap (`dx›`): type any cluster command (e.g. `set/filter mode rtty`, `sh/dx 10`) and Enter sends it; ↑/↓ recalls history and the last few cluster replies are shown beneath. Settings has a "commands sent after login" box so filters are re-applied automatically every time Diddle connects.
+- Bandmap **all bands / current band** toggle. All-bands mode shows spots from every band (with a band column) so mults elsewhere and band activity are visible before you QSY; worked-status stays per band. Current band only remains the default.
+- Type a frequency into the Call field (kHz, e.g. `14080` or `14080.5`) and press Enter to QSY the radio there, N1MM/WriteLog style. The dial is set so the signal lands on your mark tone. The ESM chip shows `↵ QSY 14.080.000` while a frequency is typed.
+- N1MM+ **Call History** file support (Settings → Call history → Load): `!!Order!!,Call,Name,State,…` files are parsed and, when a known call is typed or grabbed, the received exchange is pre-filled (tinted until you edit it). Which fields form the exchange depends on the contest — Name + State for NAQP, State for Roundup, Zone + State for CQ WW; serial contests are never guessed. The file path is remembered and reloaded on launch.
+- **Saved contest setups** (Settings): save the current contest + F-key messages + call-history file under a name, and pick it from a dropdown later to bring everything back. Edits made while a setup is active are written back to it.
+
+### Changed
+- The ESM chip in S&P mode with an empty Call field now reads "S&P · enter a call" (was "grab a call", which read like a control).
+- The waterfall's right-hand frequency label and mode hint now follow the actual sideband (DIGL reads high → low across the display).
+
+### Fixed
+- Frequency handling now consistently accounts for DIGL (LSB): the mark tone sits *below* the dial, so
+  - clicking a bandmap row, waterfall tag, or cluster spot now tunes the dial to `spot + mark` (was `spot − mark`, landing ~4 kHz low);
+  - decoder spots are placed at `dial − audio` on the bandmap and waterfall (were `dial + audio`);
+  - the frequency shown in the Entry header and written to the log/ADIF/Cabrillo is the mark-tone RF (`dial − mark`) rather than the bare dial, matching what other loggers and the cluster report.
+
 ## [0.1.8] — 2026-08-14
 
 ### Fixed

@@ -34,6 +34,9 @@ A complete rundown of what Diddle does today, plus what's planned.
 
 - **8 editable macros (F1–F8)** with sensible RTTY contest defaults (CQ, exchange, TU, repeat, AGN, BRK, 73…).
 - **ESM — Enter Sends Message** (N1MM-style stepped Enter): empty → CQ, call entered → exchange, call+exch → TU + log. The ESM chip shows what `Enter` will do next.
+- **Frequency in the Call field** — type `14080` (kHz) and press `Enter` to QSY the radio so the signal lands on your mark tone.
+- **Call History pre-fill** — load an N1MM+ Call History file and the received exchange is filled in the moment a known call is typed or grabbed (contest-aware: Name + State for NAQP, State for Roundup, Zone + State for CQ WW).
+- **Saved contest setups** — contest + F-key messages + call-history file stored under a name; pick one to bring a previous contest's configuration back.
 - **In-entry callsign autocomplete** — arrow keys to pick, `Tab`/`Enter` to accept SCP suggestions.
 - Macros persist to local storage and merge cleanly when new default slots ship.
 
@@ -74,8 +77,9 @@ Each profile knows its Cabrillo `CONTEST:` name and builds the sent exchange fro
 
 - **Telnet DX cluster client** (default `dxc.k1ttt.net:7373`).
 - **Live spot stream** with TTL pruning, feeding the **bandmap panel**.
-- **Click-to-QSY** from cluster spots.
-- **Raw cluster console** for sending commands and watching the line log.
+- **Click-to-QSY** from cluster spots (DIGL-aware — the dial is set so the spot lands on your mark tone).
+- **Cluster command line** under the bandmap for `set/filter`, `sh/dx`, etc., plus persisted **login commands** re-sent every time Diddle connects.
+- **Bandmap current-band / all-bands toggle**, with per-band worked status.
 
 ## Display & tools
 
@@ -103,7 +107,7 @@ Rough and subject to change — ideas, not promises:
 - [ ] CW/PSK modes alongside RTTY
 - [ ] Log import (ADIF) and merge
 - [ ] Code signing / notarization for macOS & Windows installers
-- [ ] Telnet cluster filters and skimmer integration
+- [ ] Skimmer integration
 - [ ] In-app screenshots & docs
 
 Have a request? [Open an issue](https://github.com/WW2DX/diddle/issues).

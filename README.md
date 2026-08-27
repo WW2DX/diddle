@@ -73,6 +73,15 @@ Diddle uses N1MM-style **Enter Sends Message** stepping in the entry window:
 
 The ESM chip in the entry window always shows what the next `Enter` will do. `Esc` aborts an in-flight transmission. The `F1`–`F8` macros are fully editable in Settings and support `<MYCALL>`, `<CALL>`, and `<SERIAL>` substitution.
 
+Other entry-window conveniences:
+
+- **Type a frequency in the Call field** (kHz, e.g. `14080`) and press `Enter` to QSY there — the dial is set so the signal lands on your mark tone.
+- **Call History:** load an N1MM+ Call History file in Settings and the received exchange is pre-filled (shown in amber until you edit it) as soon as a known call is typed or grabbed.
+- **Saved contest setups** (Settings) bring back a contest's profile, F-key messages, and history file in one pick.
+- **DX cluster commands:** the `dx›` line under the bandmap sends any command to the connected cluster; commands entered in Settings are re-sent automatically after each login (handy for `set/filter mode rtty`).
+
+> **Logged frequency:** Diddle logs and displays the RF of the **mark tone** (`dial − mark` in DIGL), which is what other loggers and the cluster report — not the bare dial reading.
+
 ---
 
 ## Tech stack
@@ -108,6 +117,7 @@ src-tauri/               Rust backend (Tauri)
     dsp/                 rtty, rtty_tx, agc, biquad, scope, spectrum, multi_decoder
     cluster.rs           DX cluster telnet client
     scp.rs               Super Check Partial database
+    call_history.rs      N1MM+ call-history file (Exch pre-fill)
     log_storage.rs       QSO log persistence
     wav_player.rs        WAV playback for decoder testing
     ipc.rs               Tauri command handlers
