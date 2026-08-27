@@ -5,6 +5,8 @@ All notable changes to Diddle are documented here. Format loosely follows
 
 ## [Unreleased]
 
+## [0.1.9] — 2026-08-27
+
 ### Added
 - DX cluster command line under the bandmap (`dx›`): type any cluster command (e.g. `set/filter mode rtty`, `sh/dx 10`) and Enter sends it; ↑/↓ recalls history and the last few cluster replies are shown beneath. Settings has a "commands sent after login" box so filters are re-applied automatically every time Diddle connects.
 - Bandmap **all bands / current band** toggle. All-bands mode shows spots from every band (with a band column) so mults elsewhere and band activity are visible before you QSY; worked-status stays per band. Current band only remains the default.
@@ -99,7 +101,11 @@ Initial public release.
 - Spectrum waterfall, crossed-bananas tuning scope, and WAV player for offline decoder testing.
 - Cross-platform installers (macOS, Windows, Linux) built in CI.
 
-[Unreleased]: https://github.com/WW2DX/diddle/compare/v0.1.5...HEAD
+[Unreleased]: https://github.com/WW2DX/diddle/compare/v0.1.9...HEAD
+[0.1.9]: https://github.com/WW2DX/diddle/compare/v0.1.8...v0.1.9
+[0.1.8]: https://github.com/WW2DX/diddle/compare/v0.1.7...v0.1.8
+[0.1.7]: https://github.com/WW2DX/diddle/compare/v0.1.6...v0.1.7
+[0.1.6]: https://github.com/WW2DX/diddle/compare/v0.1.5...v0.1.6
 [0.1.5]: https://github.com/WW2DX/diddle/compare/v0.1.4...v0.1.5
 [0.1.4]: https://github.com/WW2DX/diddle/compare/v0.1.3...v0.1.4
 [0.1.3]: https://github.com/WW2DX/diddle/compare/v0.1.2...v0.1.3
