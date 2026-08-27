@@ -66,6 +66,7 @@ impl ClusterClient {
         host: String,
         port: u16,
         login: String,
+        login_commands: Vec<String>,
     ) -> anyhow::Result<()> {
         // Cancel any existing connection.
         if let Some(h) = self.task.write().await.take() {
@@ -75,7 +76,7 @@ impl ClusterClient {
 
         let me = self.clone();
         let handle = tokio::spawn(async move {
-            me.run_loop(host, port, login).await;
+            me.run_loop(host, port, login, login_commands).await;
         });
         *self.task.write().await = Some(handle);
         Ok(())
@@ -107,7 +108,13 @@ impl ClusterClient {
         let _ = self.app.emit("cluster:state", &s);
     }
 
-    async fn run_loop(self: Arc<Self>, host: String, port: u16, login: String) {
+    async fn run_loop(
+        self: Arc<Self>,
+        host: String,
+        port: u16,
+        login: String,
+        login_commands: Vec<String>,
+    ) {
         self.set_state(ClusterState::Connecting {
             host: host.clone(),
             port,
@@ -148,6 +155,16 @@ impl ClusterClient {
         tokio::spawn(async move {
             tokio::time::sleep(std::time::Duration::from_millis(500)).await;
             let _ = cmd_tx2.send(login_clone).await;
+            // Then the operator's saved login commands (filters etc.),
+            // paced so the server has processed the login first.
+            for cmd in login_commands {
+                let cmd = cmd.trim().to_string();
+                if cmd.is_empty() || cmd.starts_with('#') {
+                    continue;
+                }
+                tokio::time::sleep(std::time::Duration::from_millis(1200)).await;
+                let _ = cmd_tx2.send(cmd).await;
+            }
         });
 
         let mut logged_in = false;

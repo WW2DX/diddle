@@ -58,8 +58,13 @@ class ClusterStore {
     if (this.pruneTimer) clearInterval(this.pruneTimer);
   }
 
-  async connect(host: string, port: number, login: string) {
-    await invoke("cluster_connect", { host, port, login });
+  async connect(
+    host: string,
+    port: number,
+    login: string,
+    loginCommands: string[] = [],
+  ) {
+    await invoke("cluster_connect", { host, port, login, loginCommands });
   }
 
   async disconnect() {

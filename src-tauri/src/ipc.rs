@@ -223,11 +223,12 @@ pub async fn cluster_connect(
     host: String,
     port: u16,
     login: String,
+    login_commands: Option<Vec<String>>,
 ) -> Result<(), String> {
     state
         .cluster
         .clone()
-        .connect(host, port, login)
+        .connect(host, port, login, login_commands.unwrap_or_default())
         .await
         .map_err(|e| e.to_string())
 }

@@ -89,6 +89,7 @@
           settings.clusterHost,
           settings.clusterPort,
           login,
+          settings.clusterLoginCommandList,
         );
       }
     } catch (e: any) {

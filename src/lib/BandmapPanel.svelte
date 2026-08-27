@@ -31,11 +31,12 @@
   let rows = $derived.by<BandmapRow[]>(() => {
     const map = new Map<string, BandmapRow>();
     const band = currentBand;
-    const workedCallsThisBand = new Set(
-      qsoLog.qsos
-        .filter((q) => q.band === band)
-        .map((q) => q.call.toUpperCase()),
+    const wants = (b: string) => allBands || b === band;
+    // Worked-status is per band: "W1AW@20m".
+    const worked = new Set(
+      qsoLog.qsos.map((q) => `${q.call.toUpperCase()}@${q.band}`),
     );
+    const keyOf = (call: string, b: string) => (allBands ? `${call}@${b}` : call);
 
     // Worked stations (always-on, even when no spots exist)
     for (const q of qsoLog.qsos) {
@@ -122,9 +123,17 @@
 <section class="panel">
   <header>
     <h2>
-      Bandmap <span class="dim">· {currentBand}</span>
+      Bandmap <span class="dim">· {allBands ? "all bands" : currentBand}</span>
     </h2>
     <div class="legend">
+      <button
+        class="band-toggle"
+        class:on={allBands}
+        onclick={() => settings.toggleBandmapAllBands()}
+        title="Show spots from every band, or only the band the radio is on"
+      >
+        {allBands ? "all bands" : currentBand + " only"}
+      </button>
       <span class="src-tag cluster">●</span> cluster
       <span class="src-tag decoder">●</span> decoder
       <span class="src-tag log">●</span> worked
@@ -134,7 +143,7 @@
 
   {#if rows.length === 0}
     <div class="empty">
-      No spots on {currentBand} yet. Connect to a DX cluster (Settings) or
+      No spots {allBands ? "" : `on ${currentBand} `}yet. Connect to a DX cluster (Settings) or
       let the multi-decoder find some signals on this band.
     </div>
   {:else}
@@ -143,11 +152,12 @@
         <button
           class="row src-{r.source}"
           class:worked={r.worked}
+          class:offband={allBands && r.band !== currentBand}
           onclick={() => qsyTo(r)}
           title={r.comment || `QSY to ${fmtMhz(r.freqHz)}`}
         >
           <span class="src-tag {r.source}">●</span>
-          <span class="freq">{fmtMhz(r.freqHz)}</span>
+          <span class="freq">{fmtMhz(r.freqHz)}{#if allBands}<span class="band-col"> {r.band}</span>{/if}</span>
           <span class="call">{r.call}</span>
           <span class="comment">{r.comment || ""}</span>
           <span class="age">{ago(r.timestamp)}</span>
@@ -254,4 +264,68 @@
     font-size: 11px;
     text-align: right;
   }
+  .band-col { color: #8a949d; font-weight: 400; font-size: 10px; }
+  .row.offband .freq { color: #b8c2cc; }
+
+  .band-toggle {
+    background: transparent;
+    border: 1px solid #3a4452;
+    color: #8a949d;
+    border-radius: 3px;
+    padding: 2px 8px;
+    font-size: 10px;
+    font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+    cursor: pointer;
+    margin-right: 6px;
+  }
+  .band-toggle:hover { color: #c5d1de; background: #1c2024; }
+  .band-toggle.on { border-color: #4a90e2; color: #92c5fa; }
+
+  .cmdline {
+    margin-top: 8px;
+    font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  }
+  .cmd-row {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+  .prompt { font-size: 11px; }
+  .cmd-row input {
+    flex: 1;
+    background: #0c0e10;
+    border: 1px solid #2a2f33;
+    border-radius: 3px;
+    color: #e6e6e6;
+    padding: 5px 8px;
+    font-family: inherit;
+    font-size: 12px;
+  }
+  .cmd-row input:focus { outline: none; border-color: #4a90e2; }
+  .cmd-row input:disabled { opacity: 0.5; }
+  .cmd-row button.ghost {
+    background: transparent;
+    border: 1px solid #3a4452;
+    color: #8a949d;
+    border-radius: 3px;
+    padding: 4px 10px;
+    font-size: 11px;
+    cursor: pointer;
+  }
+  .cmd-row button.ghost:hover:not(:disabled) { color: #c5d1de; background: #1c2024; }
+  .cmd-row button.ghost:disabled { opacity: 0.4; cursor: default; }
+  .cmd-error { color: #f87171; font-size: 11px; margin-top: 4px; }
+  .tail {
+    margin-top: 6px;
+    max-height: 84px;
+    overflow-y: auto;
+    background: #0c0e10;
+    border: 1px solid #1f2429;
+    border-radius: 4px;
+    padding: 4px 8px;
+    font-size: 11px;
+    color: #8a949d;
+  }
+  .tail .line { white-space: pre-wrap; word-break: break-all; }
+  .tail .line.tx { color: #92c5fa; }
 </style>
