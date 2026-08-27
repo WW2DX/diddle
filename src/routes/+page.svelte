@@ -17,6 +17,7 @@
   import { settings } from "$lib/settings.svelte";
   import { cluster } from "$lib/cluster.svelte";
   import { macroState } from "$lib/macros.svelte";
+  import { contestSetups } from "$lib/contestSetups.svelte";
 
   // Rig state is owned here and propagated down. Header subscribes to the
   // backend tci:rig events and writes back via $bindable.
@@ -59,9 +60,19 @@
     setZoom(zoom + (e.deltaY < 0 ? 0.05 : -0.05));
   }
 
+  // Keep the active saved contest setup in step with live edits so
+  // re-loading it later brings back exactly what was used.
+  $effect(() => {
+    macroState.macros;
+    settings.activeContest;
+    settings.historyPath;
+    contestSetups.syncActive();
+  });
+
   onMount(() => {
     settings.load();
     macroState.load();
+    contestSetups.load();
     qsoLog.load();
     spots.init();
     cluster.init();

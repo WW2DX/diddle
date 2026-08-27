@@ -15,6 +15,7 @@
   } from "$lib/tci";
   import { cluster } from "$lib/cluster.svelte";
   import { macroState } from "$lib/macros.svelte";
+  import { contestSetups } from "$lib/contestSetups.svelte";
 
   // Show the format hint based on the current selection.
   let formatHint = $derived(activeContest().exchangeFormat);
@@ -645,6 +646,35 @@
     align-self: flex-end;
   }
   .cluster-btn:hover { background: #345080; }
+  .cluster-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+  .login-cmds { margin-top: 10px; }
+  textarea {
+    background: #0c0e10;
+    border: 1px solid #2a2f33;
+    border-radius: 3px;
+    color: #e6e6e6;
+    padding: 6px 10px;
+    font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+    font-size: 12px;
+    resize: vertical;
+  }
+  textarea:focus { outline: none; border-color: #4a90e2; }
+  .setup-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .setup-row select { min-width: 180px; }
+  .setup-row input { flex: 1; }
+  .setup-row .del {
+    background: transparent;
+    border: 1px solid #3a4452;
+    color: #8a949d;
+    border-radius: 4px;
+    padding: 5px 9px;
+    cursor: pointer;
+  }
+  .setup-row .del:hover { color: #f87171; border-color: #f87171; }
 
   .macros {
     margin-top: 14px;

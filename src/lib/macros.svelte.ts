@@ -93,6 +93,16 @@ class MacroState {
     this.save();
   }
 
+  /// Replace every slot from a saved set (contest setups). Unknown slots are
+  /// ignored; missing ones keep their defaults.
+  replaceAll(ms: Macro[]) {
+    this.macros = DEFAULT_MACROS.map((d) => {
+      const found = ms.find((m) => m.key === d.key);
+      return found ? { key: d.key, label: found.label ?? d.label, text: found.text ?? d.text } : { ...d };
+    });
+    this.save();
+  }
+
   expand(template: string, ctx: { call?: string } = {}): string {
     // Fall back to the entry window's live Call field so macros fired from the
     // F-keys (ESM off, no per-QSO context) still resolve <CALL>.
