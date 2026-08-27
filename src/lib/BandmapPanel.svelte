@@ -28,6 +28,10 @@
   // radio frequency snapshot taken when each spot arrived. For simplicity
   // we use the *current* rig.freq — works fine as long as the user isn't
   // mid-QSY when spots are generated.
+  // Current band only (default) or every band — the latter shows mults
+  // popping up elsewhere and how busy a band is before you QSY there.
+  let allBands = $derived(settings.bandmapAllBands);
+
   let rows = $derived.by<BandmapRow[]>(() => {
     const map = new Map<string, BandmapRow>();
     const band = currentBand;

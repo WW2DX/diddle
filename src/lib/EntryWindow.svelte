@@ -24,11 +24,32 @@
   let contest = $derived(activeContest());
   let needsExch = $derived(contest.requiresExchange !== false);
   let sentString = $derived(contest.buildSent(qsoLog.nextSerial));
-  let band = $derived(bandFromHz(rig.freq));
-  let dupe = $derived(call.length >= 3 && qsoLog.isDupe(call, band));
-  let canLog = $derived(
-    call.length >= 3 && (!needsExch || exchRcvd.length > 0),
+  // The frequency we log and display is where the *mark tone* sits on the
+  // air (dial − mark in DIGL), which is what other loggers and the cluster
+  // report — not the bare dial reading.
+  let qsoFreqHz = $derived(rfFromAudio(rig.freq, rttyConfig.markHz, rig.mode));
+  let band = $derived(bandFromHz(qsoFreqHz));
+  // A bare number in the Call field is a frequency (kHz), N1MM/WriteLog
+  // style: Enter QSYs the radio there instead of running ESM.
+  let isFreqEntry = $derived(/^\d+(\.\d+)?$/.test(call) && call.length >= 3);
+  let freqEntryHz = $derived(isFreqEntry ? parseFreqInput(call) : null);
+  let dupe = $derived(
+    !isFreqEntry && call.length >= 3 && qsoLog.isDupe(call, band),
   );
+  let canLog = $derived(
+    !isFreqEntry && call.length >= 3 && (!needsExch || exchRcvd.length > 0),
+  );
+
+  // Retune so the typed frequency lands on the mark tone, then clear.
+  async function qsyToTyped() {
+    if (!freqEntryHz) return;
+    try {
+      await setFreq(dialForRf(freqEntryHz, rttyConfig.markHz, rig.mode));
+      clearForm();
+    } catch (e) {
+      console.error("set_freq failed", e);
+    }
+  }
 
   // SCP suggestions — debounced as the user types in the call field.
   let suggestions = $state<string[]>([]);
@@ -114,8 +135,14 @@
   let esmPhase = $derived.by<Phase>(() => {
     const hasCall = call.trim().length > 0;
     const hasExch = exchRcvd.trim().length > 0;
+    if (isFreqEntry) {
+      return {
+        cls: "idle",
+        label: freqEntryHz ? `↵ QSY ${fmtMhz(freqEntryHz)}` : "↵ QSY ?",
+      };
+    }
     if (settings.spMode) {
-      if (!hasCall) return { cls: "idle", label: "S&P · grab a call" };
+      if (!hasCall) return { cls: "idle", label: "S&P · enter a call" };
       if (!exchSent && !hasExch) return { cls: "cq", label: "S&P · ↵ Call" };
       if (!exchSent) return { cls: "excg", label: "S&P · ↵ Excg" };
       return { cls: "tu", label: "S&P · ↵ TU+Log" };
@@ -229,7 +256,9 @@
 
     if (e.key === "Enter") {
       e.preventDefault();
-      if (settings.esm) {
+      if (isFreqEntry) {
+        qsyToTyped();
+      } else if (settings.esm) {
         esmEnter();
       } else {
         logQso();
