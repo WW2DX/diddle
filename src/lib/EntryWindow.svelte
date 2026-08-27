@@ -169,7 +169,7 @@
       id: crypto.randomUUID(),
       ts: Date.now(),
       call: c,
-      freqHz: rig.freq,
+      freqHz: qsoFreqHz,
       band,
       mode: rig.mode || "USB",
       rstSent: "599",
@@ -321,8 +321,8 @@
     <div class="ctx">
       <span class="dim">band</span>
       <span class="band">{band}</span>
-      <span class="dim">freq</span>
-      <span class="num">{fmtMhz(rig.freq)}</span>
+      <span class="dim" title="Mark-tone RF (dial − mark in DIGL) — what gets logged">freq</span>
+      <span class="num" title="dial {fmtMhz(rig.freq)}">{fmtMhz(qsoFreqHz)}</span>
       <span class="dim">mode</span>
       <span class="num">{(rig.mode || "—").toUpperCase()}</span>
       <button

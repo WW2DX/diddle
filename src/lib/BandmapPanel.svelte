@@ -5,6 +5,8 @@
   import { qsoLog } from "$lib/qsoLog.svelte";
   import { rttyConfig } from "$lib/rttyConfig.svelte";
   import { bandFromHz, fmtMhz } from "$lib/bands";
+  import { rfFromAudio, dialForRf } from "$lib/freq";
+  import { settings } from "$lib/settings.svelte";
 
   let { rig }: { rig: RigState } = $props();
 
@@ -12,6 +14,7 @@
 
   interface BandmapRow {
     call: string;
+    band: string;
     freqHz: number;
     source: Source;
     timestamp: number;
@@ -36,11 +39,13 @@
 
     // Worked stations (always-on, even when no spots exist)
     for (const q of qsoLog.qsos) {
-      if (q.band !== band) continue;
-      const key = q.call.toUpperCase();
+      if (!wants(q.band)) continue;
+      const call = q.call.toUpperCase();
+      const key = keyOf(call, q.band);
       if (!map.has(key)) {
         map.set(key, {
-          call: key,
+          call,
+          band: q.band,
           freqHz: q.freqHz,
           source: "log",
           timestamp: q.ts,
@@ -49,17 +54,20 @@
       }
     }
 
-    // Multi-decoder spots — current band only.
+    // Multi-decoder spots — always on the current band (they're audio offsets).
     for (const s of decoderSpots.spots) {
-      const freqHz = (rig.freq || 0) + s.audio_hz;
-      if (bandFromHz(freqHz) !== band) continue;
-      const key = s.call.toUpperCase();
+      const freqHz = rfFromAudio(rig.freq || 0, s.audio_hz, rig.mode);
+      const b = bandFromHz(freqHz);
+      if (!wants(b)) continue;
+      const call = s.call.toUpperCase();
+      const key = keyOf(call, b);
       const entry: BandmapRow = {
-        call: key,
+        call,
+        band: b,
         freqHz,
         source: "decoder",
         timestamp: s.timestamp_ms,
-        worked: workedCallsThisBand.has(key),
+        worked: worked.has(`${call}@${b}`),
       };
       const existing = map.get(key);
       if (!existing || existing.source === "log") {
@@ -67,17 +75,19 @@
       }
     }
 
-    // Cluster spots — current band only.
+    // Cluster spots.
     for (const s of cluster.spots) {
-      if (s.band !== band) continue;
-      const key = s.dx_call.toUpperCase();
+      if (!wants(s.band)) continue;
+      const call = s.dx_call.toUpperCase();
+      const key = keyOf(call, s.band);
       const entry: BandmapRow = {
-        call: key,
+        call,
+        band: s.band,
         freqHz: s.freq_hz,
         source: "cluster",
         timestamp: s.timestamp_ms,
         comment: s.comment,
-        worked: workedCallsThisBand.has(key),
+        worked: worked.has(`${call}@${s.band}`),
       };
       const existing = map.get(key);
       // Cluster wins over decoder + log because it usually carries comment

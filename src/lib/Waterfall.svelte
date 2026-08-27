@@ -5,6 +5,7 @@
   import { spots } from "$lib/spots.svelte";
   import { cluster } from "$lib/cluster.svelte";
   import { entryBus } from "$lib/entry.svelte";
+  import { rfFromAudio, audioFromRf, dialForRf } from "$lib/freq";
   import { bandFromHz } from "$lib/bands";
 
   // Canvas dimensions. Width matches the half-spectrum (fft_size/2).
@@ -280,10 +281,10 @@
   }
 
   // QSY to a clicked spot: retune the radio so the signal lands at the
-  // user's preferred mark tone. In USB: vfo_new = signal_abs_hz - markHz.
+  // user's preferred mark tone. In DIGL: vfo_new = signal_abs_hz + markHz.
   async function qsyToAbs(abs_hz: number) {
     if (!abs_hz) return;
-    const newVfo = Math.round(abs_hz - rttyConfig.markHz);
+    const newVfo = dialForRf(abs_hz, rttyConfig.markHz, rig.mode);
     try {
       await setFreq(newVfo);
     } catch (e) {
@@ -312,7 +313,7 @@
       map.set(key, {
         call: key,
         audio_hz: s.audio_hz,
-        abs_hz: rig.freq + s.audio_hz,
+        abs_hz: rfFromAudio(rig.freq, s.audio_hz, rig.mode),
         source: "decoder",
         timestamp_ms: s.timestamp_ms,
       });
@@ -320,7 +321,7 @@
 
     for (const s of cluster.spots) {
       if (s.band !== band) continue;
-      const audio_hz = s.freq_hz - rig.freq;
+      const audio_hz = audioFromRf(rig.freq, s.freq_hz, rig.mode);
       if (audio_hz < 0 || audio_hz > viewSpanHz) continue;
       const key = s.dx_call.toUpperCase();
       map.set(key, {
@@ -340,7 +341,9 @@
     for (const u of unlisten) u();
   });
 
-  let topFreqHz = $derived(rig.freq + viewSpanHz);
+  // RF at the right-hand edge of the waterfall (audio = viewSpanHz). In DIGL
+  // that is *below* the dial, so the axis reads high → low.
+  let topFreqHz = $derived(rfFromAudio(rig.freq, viewSpanHz, rig.mode));
 
   // Map audio Hz → percent of the canvas width (for the marker overlay).
   function pctForAudioHz(hz: number): number {
@@ -636,7 +639,7 @@
 
   <div class="freq-axis">
     <span>{fmtMhz(rig.freq)}</span>
-    <span class="dim">click → set mark · DIGL · span {spanLabel(viewSpanHz)}</span>
+    <span class="dim">click → set mark · {(rig.mode || "digl").toUpperCase()} · span {spanLabel(viewSpanHz)}</span>
     <span>{fmtMhz(topFreqHz)}</span>
   </div>
 

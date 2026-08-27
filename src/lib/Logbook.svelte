@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { parseFreqInput } from "$lib/freq";
   import { tick } from "svelte";
   import { invoke } from "@tauri-apps/api/core";
   import { save as saveDialog } from "@tauri-apps/plugin-dialog";
@@ -48,7 +49,7 @@
         patch.call = editValue.trim().toUpperCase().replace(/[^A-Z0-9/]/g, "");
         break;
       case "freq": {
-        const hz = parseFreq(editValue);
+        const hz = parseFreqInput(editValue);
         if (hz !== null) {
           patch.freqHz = hz;
           patch.band = bandFromHz(hz);
@@ -70,25 +71,6 @@
     }
     qsoLog.update(id, patch);
     cancelEdit();
-  }
-
-  // Accept the common ways an operator types a frequency:
-  //   "14.080.500" → MHz.kHz.Hz (matches fmtMhz output, round-trips)
-  //   "14080.5"    → kHz
-  //   "14.0805"    → MHz (any decimal w/ a single dot)
-  //   "14080500"   → raw Hz
-  function parseFreq(raw: string): number | null {
-    const s = raw.trim();
-    if (!s) return null;
-    if (/^\d+\.\d{1,3}\.\d{1,3}$/.test(s)) {
-      const [mhz, khz, hz] = s.split(".").map(Number);
-      return mhz * 1_000_000 + khz * 1000 + hz;
-    }
-    const n = parseFloat(s);
-    if (!isFinite(n) || n <= 0) return null;
-    if (s.includes(".")) return Math.round(n * 1_000_000); // MHz w/ decimal
-    if (n < 100_000) return Math.round(n * 1000);          // kHz integer
-    return Math.round(n);                                  // raw Hz
   }
 
   function handleEditKey(e: KeyboardEvent) {
