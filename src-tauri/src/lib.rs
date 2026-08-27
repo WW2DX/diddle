@@ -1,3 +1,4 @@
+mod call_history;
 mod cluster;
 pub mod dsp;
 mod ipc;
@@ -12,6 +13,7 @@ use tauri::Manager;
 use tci::TciClient;
 use wav_player::WavPlayer;
 
+use crate::call_history::CallHistory;
 use crate::cluster::ClusterClient;
 use crate::dsp::{RttyConfig, RttyTunable};
 use crate::scp::ScpDb;
@@ -22,6 +24,7 @@ pub struct AppState {
     pub rtty: Arc<RttyTunable>,
     pub scp: Arc<ScpDb>,
     pub cluster: Arc<ClusterClient>,
+    pub history: Arc<CallHistory>,
 }
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
@@ -43,7 +46,8 @@ pub fn run() {
             let tci = Arc::new(TciClient::new(handle.clone(), rtty.clone(), scp.clone()));
             let wav = Arc::new(WavPlayer::new(handle.clone(), rtty.clone(), scp.clone()));
             let cluster = Arc::new(ClusterClient::new(handle));
-            app.manage(AppState { tci, wav, rtty, scp, cluster });
+            let history = Arc::new(CallHistory::new());
+            app.manage(AppState { tci, wav, rtty, scp, cluster, history });
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
@@ -72,6 +76,10 @@ pub fn run() {
             ipc::cluster_disconnect,
             ipc::cluster_send,
             ipc::cluster_status,
+            ipc::history_load_file,
+            ipc::history_clear,
+            ipc::history_status,
+            ipc::history_lookup,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

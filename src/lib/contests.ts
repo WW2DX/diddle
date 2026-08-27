@@ -16,6 +16,21 @@ export interface ContestProfile {
   // (ragchew) profile so you can log a contact with just a callsign. Treated
   // as true when omitted.
   requiresExchange?: boolean;
+  // Build the expected received exchange from an N1MM-style call history
+  // record (field → value, e.g. Name/State/CQZone). Return "" when the
+  // record doesn't carry what this contest needs. Omitted for serial-number
+  // contests, where history can't predict the exchange.
+  historyExchange?: (rec: Record<string, string>) => string;
+}
+
+// Case-insensitive field fetch from a history record.
+function hf(rec: Record<string, string>, ...names: string[]): string {
+  for (const n of names) {
+    for (const k of Object.keys(rec)) {
+      if (k.toLowerCase() === n.toLowerCase() && rec[k]) return rec[k];
+    }
+  }
+  return "";
 }
 
 export const CONTESTS: ContestProfile[] = [
@@ -27,6 +42,7 @@ export const CONTESTS: ContestProfile[] = [
     rcvdPlaceholder: "RST NAME QTH",
     requiresExchange: false,
     buildSent: () => `599${settings.myName ? " " + settings.myName : ""}`,
+    historyExchange: (r) => [hf(r, "Name"), hf(r, "State", "Loc1")].filter(Boolean).join(" "),
   },
   {
     id: "generic",
@@ -47,6 +63,8 @@ export const CONTESTS: ContestProfile[] = [
       const s = settings.myState ? ` ${settings.myState}` : "";
       return `599 ${z}${s}`;
     },
+    historyExchange: (r) =>
+      [hf(r, "CQZone", "Zone", "Exch1"), hf(r, "State", "Loc1")].filter(Boolean).join(" "),
   },
   {
     id: "wpx-rtty",
@@ -63,6 +81,7 @@ export const CONTESTS: ContestProfile[] = [
     exchangeFormat: "RST + State/Prov (DX: Serial)",
     rcvdPlaceholder: "MA",
     buildSent: () => `599 ${settings.myState || "?"}`,
+    historyExchange: (r) => hf(r, "State", "Loc1", "Sect", "Exch1"),
   },
   {
     id: "naqp-rtty",
@@ -75,6 +94,7 @@ export const CONTESTS: ContestProfile[] = [
       const s = settings.myState || "?";
       return `${n} ${s}`;
     },
+    historyExchange: (r) => [hf(r, "Name"), hf(r, "State", "Loc1")].filter(Boolean).join(" "),
   },
 ];
 

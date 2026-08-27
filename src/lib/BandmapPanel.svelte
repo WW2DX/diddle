@@ -105,10 +105,60 @@
     return [...map.values()].sort((a, b) => a.freqHz - b.freqHz);
   });
 
+  // ---- Cluster command line (set/filter …, sh/dx, etc.) ----
+  let cmd = $state("");
+  let cmdInput: HTMLInputElement | undefined;
+  let cmdHistory: string[] = [];
+  let cmdHistIdx = -1;
+  let cmdError = $state<string | null>(null);
+  let clusterUp = $derived(cluster.state.kind === "connected");
+  // Tail of the raw cluster log so replies to commands are visible here.
+  let tail = $derived(cluster.lines.slice(-6));
+  let tailEl = $state<HTMLDivElement | undefined>();
+  $effect(() => {
+    tail; // re-run when lines change
+    tailEl?.scrollTo({ top: tailEl.scrollHeight });
+  });
+
+  async function sendCmd() {
+    const line = cmd.trim();
+    if (!line) return;
+    cmdError = null;
+    try {
+      await cluster.send(line);
+      cmdHistory = [line, ...cmdHistory.filter((h) => h !== line)].slice(0, 30);
+      cmdHistIdx = -1;
+      cmd = "";
+    } catch (e: any) {
+      cmdError = String(e);
+    }
+  }
+
+  function onCmdKey(e: KeyboardEvent) {
+    if (e.key === "Enter") {
+      e.preventDefault();
+      sendCmd();
+    } else if (e.key === "ArrowUp") {
+      e.preventDefault();
+      if (cmdHistory.length === 0) return;
+      cmdHistIdx = Math.min(cmdHistIdx + 1, cmdHistory.length - 1);
+      cmd = cmdHistory[cmdHistIdx];
+    } else if (e.key === "ArrowDown") {
+      e.preventDefault();
+      cmdHistIdx = Math.max(cmdHistIdx - 1, -1);
+      cmd = cmdHistIdx < 0 ? "" : cmdHistory[cmdHistIdx];
+    } else if (e.key === "Escape") {
+      e.preventDefault();
+      cmd = "";
+      cmdInput?.blur();
+    }
+  }
+
   async function qsyTo(row: BandmapRow) {
     if (!rig.freq) return;
-    // Tune so the signal lands at the user's chosen mark tone (USB).
-    const newVfo = Math.round(row.freqHz - rttyConfig.markHz);
+    // Tune so the signal lands at the user's chosen mark tone. In DIGL
+    // the mark tone is *below* the dial, so the dial goes above the spot.
+    const newVfo = dialForRf(row.freqHz, rttyConfig.markHz, rig.mode);
     try {
       await setFreq(newVfo);
     } catch (e) {
@@ -169,6 +219,36 @@
       {/each}
     </div>
   {/if}
+
+  <div class="cmdline">
+    <div class="cmd-row">
+      <span class="dim prompt">dx›</span>
+      <input
+        bind:this={cmdInput}
+        bind:value={cmd}
+        onkeydown={onCmdKey}
+        disabled={!clusterUp}
+        placeholder={clusterUp
+          ? "cluster command — e.g. set/filter mode rtty · sh/dx 10 · ↑ history"
+          : "connect to a cluster in Settings to send commands"}
+        spellcheck="false"
+        autocomplete="off"
+      />
+      <button class="ghost" onclick={sendCmd} disabled={!clusterUp || !cmd.trim()}>
+        send
+      </button>
+    </div>
+    {#if cmdError}
+      <div class="cmd-error">{cmdError}</div>
+    {/if}
+    {#if clusterUp && tail.length > 0}
+      <div class="tail" bind:this={tailEl}>
+        {#each tail as l}
+          <div class="line {l.dir}">{l.dir === "tx" ? "› " : ""}{l.text}</div>
+        {/each}
+      </div>
+    {/if}
+  </div>
 </section>
 
 <style>

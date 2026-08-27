@@ -17,6 +17,9 @@ interface Stored {
   esm?: boolean;
   spMode?: boolean; // false = Run, true = Search & Pounce
   decodeHistoryLines?: number;
+  clusterLoginCommands?: string; // one per line, sent after login
+  bandmapAllBands?: boolean; // false = current band only
+  historyPath?: string; // N1MM-style call history file
 }
 
 // Bounds for how many decoded lines the RX window keeps before old lines
@@ -38,6 +41,9 @@ class Settings {
   esm = $state<boolean>(true);
   spMode = $state<boolean>(false);
   decodeHistoryLines = $state<number>(HISTORY_DEFAULT);
+  clusterLoginCommands = $state<string>("");
+  bandmapAllBands = $state<boolean>(false);
+  historyPath = $state<string>("");
   loaded = $state(false);
 
   load() {
@@ -59,6 +65,9 @@ class Settings {
         if (obj.decodeHistoryLines !== undefined) {
           this.decodeHistoryLines = this.clampHistory(obj.decodeHistoryLines);
         }
+        this.clusterLoginCommands = obj.clusterLoginCommands || "";
+        if (obj.bandmapAllBands !== undefined) this.bandmapAllBands = obj.bandmapAllBands;
+        this.historyPath = obj.historyPath || "";
       }
     } catch (e) {
       console.error("settings.load failed", e);
@@ -83,6 +92,9 @@ class Settings {
           esm: this.esm,
           spMode: this.spMode,
           decodeHistoryLines: this.decodeHistoryLines,
+          clusterLoginCommands: this.clusterLoginCommands,
+          bandmapAllBands: this.bandmapAllBands,
+          historyPath: this.historyPath,
         } satisfies Stored),
       );
     } catch (e) {
@@ -154,6 +166,29 @@ class Settings {
 
   setDecodeHistoryLines(v: number) {
     this.decodeHistoryLines = this.clampHistory(v);
+    this.save();
+  }
+
+  setClusterLoginCommands(v: string) {
+    this.clusterLoginCommands = v;
+    this.save();
+  }
+  /// Login commands as a list — one per line, blanks and #comments dropped.
+  get clusterLoginCommandList(): string[] {
+    return this.clusterLoginCommands
+      .split(/\r?\n/)
+      .map((l) => l.trim())
+      .filter((l) => l.length > 0 && !l.startsWith("#"));
+  }
+  setBandmapAllBands(v: boolean) {
+    this.bandmapAllBands = v;
+    this.save();
+  }
+  toggleBandmapAllBands() {
+    this.setBandmapAllBands(!this.bandmapAllBands);
+  }
+  setHistoryPath(v: string) {
+    this.historyPath = v;
     this.save();
   }
 }

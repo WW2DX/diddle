@@ -7,7 +7,11 @@
     scpAutoDownload,
     scpLoadFile,
     scpStatus,
+    historyLoadFile,
+    historyClear,
+    historyStatus,
     type ScpStatus,
+    type CallHistoryStatus,
   } from "$lib/tci";
   import { cluster } from "$lib/cluster.svelte";
   import { macroState } from "$lib/macros.svelte";
@@ -19,11 +23,84 @@
   let scpLoading = $state(false);
   let scpError = $state<string | null>(null);
 
+  // ---- N1MM-style call history (Exch prefill) ----
+  let hist = $state<CallHistoryStatus>({ count: 0, path: "", fields: [] });
+  let histLoading = $state(false);
+  let histError = $state<string | null>(null);
+
+  async function loadHistoryFromPath(path: string) {
+    histLoading = true;
+    histError = null;
+    try {
+      hist = await historyLoadFile(path);
+      settings.setHistoryPath(path);
+    } catch (e: any) {
+      histError = String(e);
+    } finally {
+      histLoading = false;
+    }
+  }
+
+  async function pickHistoryFile() {
+    const path = await openDialog({
+      title: "Choose N1MM+ Call History file",
+      multiple: false,
+      filters: [{ name: "Call history / text", extensions: ["txt", "csv", "hist"] }],
+    });
+    if (!path || typeof path !== "string") return;
+    await loadHistoryFromPath(path);
+  }
+
+  async function clearHistory() {
+    histError = null;
+    try {
+      hist = await historyClear();
+      settings.setHistoryPath("");
+    } catch (e: any) {
+      histError = String(e);
+    }
+  }
+
+  // ---- Saved contest setups ----
+  let setupName = $state("");
+  let activeSetup = $derived(contestSetups.active);
+
+  function saveSetup() {
+    const name = setupName.trim() || activeSetup?.name || "";
+    if (!name) return;
+    contestSetups.saveAs(name);
+    setupName = "";
+  }
+
+  async function pickSetup(id: string) {
+    if (!id) {
+      contestSetups.deactivate();
+      return;
+    }
+    const s = contestSetups.activate(id);
+    if (!s) return;
+    if (s.historyPath) await loadHistoryFromPath(s.historyPath);
+    else if (hist.count > 0) await clearHistory();
+  }
+
+  function deleteSetup() {
+    if (!activeSetup) return;
+    contestSetups.remove(activeSetup.id);
+  }
+
   onMount(async () => {
     try {
       scp = await scpStatus();
     } catch (e) {
       console.error("scpStatus failed", e);
+    }
+    try {
+      hist = await historyStatus();
+    } catch (e) {
+      console.error("historyStatus failed", e);
+    }
+    if (settings.historyPath && hist.count === 0) {
+      await loadHistoryFromPath(settings.historyPath);
     }
     // Auto-reload the saved SCP file on startup so the user doesn't have
     // to re-pick it every session.
@@ -272,6 +349,85 @@
     {#if clusterError}
       <div class="scp-error">{clusterError}</div>
     {/if}
+    <div class="field login-cmds">
+      <label for="c-login-cmds">Commands sent after login (one per line)</label>
+      <textarea
+        id="c-login-cmds"
+        rows="3"
+        value={settings.clusterLoginCommands}
+        oninput={(e) =>
+          settings.setClusterLoginCommands((e.target as HTMLTextAreaElement).value)}
+        placeholder={"set/filter mode rtty\nset/filter band hf"}
+        spellcheck="false"
+      ></textarea>
+      <span class="hint">
+        Filters etc. — sent automatically each time Diddle logs in. Ad-hoc
+        commands go in the <span class="mono">dx›</span> line under the bandmap.
+      </span>
+    </div>
+  </div>
+
+  <div class="cluster">
+    <div class="cluster-info">
+      <span class="scp-label">Call history</span>
+      {#if hist.count > 0}
+        <span class="scp-count">{hist.count.toLocaleString()} calls</span>
+        <span class="scp-source dim">{hist.path}</span>
+      {:else}
+        <span class="dim">none loaded</span>
+      {/if}
+    </div>
+    <div class="scp-actions">
+      <button onclick={pickHistoryFile} disabled={histLoading}>
+        {histLoading ? "Loading…" : "Load N1MM+ history file…"}
+      </button>
+      {#if hist.count > 0}
+        <button class="ghost" onclick={clearHistory}>Clear</button>
+      {/if}
+      <span class="hint">
+        Pre-fills Exch when a known call is typed or grabbed
+        {#if hist.fields.length > 0}
+          · fields: <span class="mono">{hist.fields.join(", ")}</span>
+        {/if}
+      </span>
+    </div>
+    {#if histError}
+      <div class="scp-error">{histError}</div>
+    {/if}
+  </div>
+
+  <div class="cluster setups">
+    <div class="cluster-info">
+      <span class="scp-label">Saved contest setups</span>
+      <span class="hint">
+        Contest + F-key messages + call history file. Pick one to load it;
+        edits are saved back to the active setup.
+      </span>
+    </div>
+    <div class="setup-row">
+      <select
+        value={activeSetup?.id || ""}
+        onchange={(e) => pickSetup((e.target as HTMLSelectElement).value)}
+      >
+        <option value="">— none —</option>
+        {#each contestSetups.setups as s (s.id)}
+          <option value={s.id}>{s.name}</option>
+        {/each}
+      </select>
+      <input
+        type="text"
+        bind:value={setupName}
+        placeholder={activeSetup ? `rename / save as… (${activeSetup.name})` : "name, e.g. NAQP RTTY"}
+        maxlength="40"
+        onkeydown={(e) => e.key === "Enter" && saveSetup()}
+      />
+      <button class="cluster-btn" onclick={saveSetup} disabled={!setupName.trim() && !activeSetup}>
+        {setupName.trim() ? "Save as" : "Save"}
+      </button>
+      {#if activeSetup}
+        <button class="ghost del" onclick={deleteSetup} title="Delete this setup">✕</button>
+      {/if}
+    </div>
   </div>
 
   <div class="macros">

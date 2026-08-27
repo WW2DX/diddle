@@ -4,6 +4,7 @@ use tauri::State;
 
 use std::path::PathBuf;
 
+use crate::call_history::CallHistoryStatus;
 use crate::cluster::ClusterState;
 use crate::dsp::RttyConfig;
 use crate::log_storage::{self, Qso};
@@ -247,4 +248,38 @@ pub async fn cluster_send(state: State<'_, AppState>, line: String) -> Result<()
 #[tauri::command]
 pub async fn cluster_status(state: State<'_, AppState>) -> Result<ClusterState, String> {
     Ok(state.cluster.state().await)
+}
+
+// ----- N1MM-style call history -----
+
+#[tauri::command]
+pub async fn history_load_file(
+    state: State<'_, AppState>,
+    path: String,
+) -> Result<CallHistoryStatus, String> {
+    state
+        .history
+        .load_file(&PathBuf::from(&path))
+        .await
+        .map_err(|e| format!("call history load {path}: {e}"))?;
+    Ok(state.history.status())
+}
+
+#[tauri::command]
+pub async fn history_clear(state: State<'_, AppState>) -> Result<CallHistoryStatus, String> {
+    state.history.clear();
+    Ok(state.history.status())
+}
+
+#[tauri::command]
+pub async fn history_status(state: State<'_, AppState>) -> Result<CallHistoryStatus, String> {
+    Ok(state.history.status())
+}
+
+#[tauri::command]
+pub async fn history_lookup(
+    state: State<'_, AppState>,
+    call: String,
+) -> Result<Option<std::collections::HashMap<String, String>>, String> {
+    Ok(state.history.lookup(&call))
 }

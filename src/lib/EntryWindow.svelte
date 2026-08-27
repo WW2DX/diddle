@@ -2,7 +2,9 @@
   import { qsoLog } from "$lib/qsoLog.svelte";
   import { bandFromHz, fmtMhz } from "$lib/bands";
   import { activeContest } from "$lib/contests";
-  import { scpSearch, type RigState } from "$lib/tci";
+  import { scpSearch, setFreq, historyLookup, type RigState } from "$lib/tci";
+  import { rttyConfig } from "$lib/rttyConfig.svelte";
+  import { rfFromAudio, dialForRf, parseFreqInput } from "$lib/freq";
   import { settings } from "$lib/settings.svelte";
   import { macroState } from "$lib/macros.svelte";
   import { entryBus } from "$lib/entry.svelte";
@@ -20,6 +22,33 @@
   // to the log step even when the received exchange is optional (S&P, or the
   // General QSO profile). Reset whenever we move on to a new callsign.
   let exchSent = $state(false);
+  // True while Exch holds a value pre-filled from the call-history file (and
+  // not yet edited by the operator). Lets a call change replace/clear it.
+  let exchFromHistory = $state(false);
+  let histTimer: ReturnType<typeof setTimeout> | null = null;
+
+  // Look the call up in the N1MM-style history file and pre-fill Exch if
+  // the contest can predict it (name/state/zone — never serials).
+  function lookupHistory(c: string) {
+    if (histTimer) clearTimeout(histTimer);
+    if (!contest.historyExchange || c.length < 3 || /^[0-9.]+$/.test(c)) return;
+    histTimer = setTimeout(async () => {
+      try {
+        const rec = await historyLookup(c);
+        if (normalizeCall(call) !== c) return; // call changed meanwhile
+        const ex = rec ? contest.historyExchange!(rec) : "";
+        if (ex && (exchRcvd.trim() === "" || exchFromHistory)) {
+          exchRcvd = ex;
+          exchFromHistory = true;
+        } else if (!ex && exchFromHistory) {
+          exchRcvd = "";
+          exchFromHistory = false;
+        }
+      } catch (e) {
+        console.error("history_lookup failed", e);
+      }
+    }, 120);
+  }
 
   let contest = $derived(activeContest());
   let needsExch = $derived(contest.requiresExchange !== false);
@@ -77,6 +106,7 @@
     call = s;
     suggestions = [];
     suggestionIdx = -1;
+    lookupHistory(s);
     queueMicrotask(() => exchInput?.focus());
   }
 
@@ -172,8 +202,10 @@
     call = c;
     exchRcvd = "";
     exchSent = false;
+    exchFromHistory = false;
     suggestions = [];
     suggestionIdx = -1;
+    lookupHistory(c);
     queueMicrotask(() => exchInput?.focus());
   });
 
@@ -209,6 +241,7 @@
     exchRcvd = "";
     rstRcvd = "599";
     exchSent = false;
+    exchFromHistory = false;
     queueMicrotask(() => callInput?.focus());
   }
 
@@ -217,15 +250,30 @@
     exchRcvd = "";
     rstRcvd = "599";
     exchSent = false;
+    exchFromHistory = false;
     callInput?.focus();
+  }
+
+  // Digits (and a dot) only → the operator is typing a frequency; keep it
+  // verbatim. Otherwise normalise as a callsign.
+  function normalizeEntry(s: string): string {
+    const t = s.toUpperCase().trim();
+    if (/^[0-9.]+$/.test(t)) return t.slice(0, 12);
+    return normalizeCall(t);
   }
 
   function onCallInput(e: Event) {
     const t = e.target as HTMLInputElement;
-    call = normalizeCall(t.value);
+    call = normalizeEntry(t.value);
     // Editing the callsign means a new station — restart the ESM sequence.
     exchSent = false;
+    if (/^[0-9.]+$/.test(call)) {
+      suggestions = [];
+      suggestionIdx = -1;
+      return;
+    }
     refreshSuggestions(call);
+    lookupHistory(call);
   }
 
   function onKey(e: KeyboardEvent) {
@@ -424,9 +472,12 @@
         id="exch"
         bind:this={exchInput}
         bind:value={exchRcvd}
+        oninput={() => (exchFromHistory = false)}
         onkeydown={onKey}
+        class:from-history={exchFromHistory}
         spellcheck="false"
         placeholder={contest.rcvdPlaceholder}
+        title={exchFromHistory ? "pre-filled from call history — type to override" : ""}
       />
     </div>
 
@@ -674,4 +725,6 @@
     background: #2a3f5f;
     color: #fff;
   }
+  /* Exch pre-filled from the call-history file — tinted until edited. */
+  input.from-history { color: #fbbf24; }
 </style>

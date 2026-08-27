@@ -191,3 +191,29 @@ export function onRig(cb: (r: RigState) => void): Promise<UnlistenFn> {
 export function onMsg(cb: (m: TciMsg) => void): Promise<UnlistenFn> {
   return listen<TciMsg>("tci:msg", (e) => cb(e.payload));
 }
+
+// ----- N1MM-style call history (Exch prefill) -----
+
+export interface CallHistoryStatus {
+  count: number;
+  path: string;
+  fields: string[];
+}
+
+export type CallHistoryRecord = Record<string, string>;
+
+export async function historyLoadFile(path: string): Promise<CallHistoryStatus> {
+  return await invoke("history_load_file", { path });
+}
+
+export async function historyClear(): Promise<CallHistoryStatus> {
+  return await invoke("history_clear");
+}
+
+export async function historyStatus(): Promise<CallHistoryStatus> {
+  return await invoke("history_status");
+}
+
+export async function historyLookup(call: string): Promise<CallHistoryRecord | null> {
+  return await invoke("history_lookup", { call });
+}
