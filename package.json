@@ -1,6 +1,6 @@
 {
   "name": "diddle",
-  "version": "0.1.9",
+  "version": "0.1.10",
   "description": "RTTY contest logger — TCI-first, rate-focused",
   "type": "module",
   "scripts": {

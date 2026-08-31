@@ -5,6 +5,8 @@ All notable changes to Diddle are documented here. Format loosely follows
 
 ## [Unreleased]
 
+## [0.1.10] — 2026-08-31
+
 ### Added
 - The app version is shown next to the program name in the top-left header (e.g. `Diddle v0.1.10`), so it's always clear which build is running.
 - **NET** checkbox next to AFC (visible while AFC is on): when checked, TX follows the AFC-tracked RX frequency (the old behavior); default off.
