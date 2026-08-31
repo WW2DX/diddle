@@ -174,7 +174,10 @@
   // completes (CR/LF, or it grows past the force-flush length) it's scored in
   // context: kept lines are committed to the scrollback, junk is dropped.
   let pendingLine = $state("");
-  let classifyQueue: string[] = [];
+  // Queue items are either completed RX lines awaiting classification or TX
+  // echo text; both flow through the same serialized drain so the scrollback
+  // order matches the on-air order.
+  let classifyQueue: { tx: boolean; s: string }[] = [];
   let classifying = false;
 
   function scrollSoon() {
@@ -201,13 +204,13 @@
     while ((idx = pendingLine.search(/[\r\n]/)) >= 0) {
       let n = 1;
       while (idx + n < pendingLine.length && /[\r\n]/.test(pendingLine[idx + n])) n++;
-      classifyQueue.push(pendingLine.slice(0, idx));
+      classifyQueue.push({ tx: false, s: pendingLine.slice(0, idx) });
       pendingLine = pendingLine.slice(idx + n);
     }
     // Force-finalize an over-long unterminated line so a station that never
     // sends CR/LF still gets scored and committed.
     if (pendingLine.length > 200) {
-      classifyQueue.push(pendingLine);
+      classifyQueue.push({ tx: false, s: pendingLine });
       pendingLine = "";
     }
     scrollSoon();
@@ -221,8 +224,12 @@
     classifying = true;
     try {
       while (classifyQueue.length > 0) {
-        const line = classifyQueue.shift()!;
-        if (line.trim().length > 0) await classifyAndEmit(line);
+        const item = classifyQueue.shift()!;
+        if (item.tx) {
+          appendText(item.s, true);
+        } else if (item.s.trim().length > 0) {
+          await classifyAndEmit(item.s);
+        }
       }
     } finally {
       classifying = false;
@@ -288,7 +295,21 @@
     await rttyConfig.load();
     unlisten = await onRtty(appendChunk);
     // TX echo bypasses the noise filter — it's our own text, always shown.
-    unlistenTx = await onTxEcho((c) => appendText(c, true));
+    // With the filter on it still flows through the serialized queue (behind
+    // any RX line awaiting classification) so scrollback order matches the
+    // on-air order; the in-progress RX line is finalized first.
+    unlistenTx = await onTxEcho((c) => {
+      if (!filterNoise) {
+        appendText(c, true);
+        return;
+      }
+      if (pendingLine) {
+        classifyQueue.push({ tx: false, s: pendingLine });
+        pendingLine = "";
+      }
+      classifyQueue.push({ tx: true, s: c });
+      drainClassify();
+    });
   });
 
   onDestroy(() => {

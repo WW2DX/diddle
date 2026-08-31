@@ -37,6 +37,9 @@ const TX_AMPLITUDE: f32 = 0.6;
 // Sideband our AFSK RTTY tones assume. We force the radio into DIGL on
 // connect and before every transmit so the operator never has to set it.
 const RTTY_MODE: &str = "digl";
+// After PTT drops, keep the RX decoders muted this long so the level jump
+// at the TX→RX transition can't pump the AGC/noise floor into junk chars.
+const RX_MUTE_HOLDOFF_MS: u64 = 300;
 
 /// Build a TCI TXAudioStream binary message from interleaved-stereo f32
 /// samples. Header is the standard 64-byte layout (7 u32 fields + reserved).
@@ -179,6 +182,12 @@ pub struct TciClient {
     /// Set by `abort_tx` to bail out of an in-flight transmit. Reset at the
     /// start of each new transmission.
     tx_cancel: AtomicBool,
+    /// While set, the RX audio path skips the RTTY demod, multi-decoder and
+    /// tuning scope. The radio's monitor/loopback audio during our own TX
+    /// otherwise gets decoded and interleaved with the TX echo as garbage.
+    rx_mute: AtomicBool,
+    /// Keeps the mute in force briefly after unkey (see RX_MUTE_HOLDOFF_MS).
+    rx_resume_at: std::sync::Mutex<Option<Instant>>,
 }
 
 impl TciClient {
@@ -193,6 +202,8 @@ impl TciClient {
             tx_busy: RwLock::new(false),
             tx_state: std::sync::Mutex::new(None),
             tx_cancel: AtomicBool::new(false),
+            rx_mute: AtomicBool::new(false),
+            rx_resume_at: std::sync::Mutex::new(None),
         }
     }
 
@@ -259,9 +270,30 @@ impl TciClient {
             *busy = true;
         }
         self.tx_cancel.store(false, Ordering::SeqCst);
+        self.rx_mute.store(true, Ordering::SeqCst);
         let result = self.transmit_inner(text).await;
+        self.rx_mute.store(false, Ordering::SeqCst);
+        *self.rx_resume_at.lock().unwrap() =
+            Some(Instant::now() + Duration::from_millis(RX_MUTE_HOLDOFF_MS));
         *self.tx_busy.write().await = false;
         result
+    }
+
+    /// True while the RX decode pipeline should stay quiet: during a
+    /// transmission and for a short hold-off after unkey.
+    fn rx_muted(&self) -> bool {
+        if self.rx_mute.load(Ordering::SeqCst) {
+            return true;
+        }
+        let mut guard = self.rx_resume_at.lock().unwrap();
+        match *guard {
+            Some(t) if Instant::now() < t => true,
+            Some(_) => {
+                *guard = None;
+                false
+            }
+            None => false,
+        }
     }
 
     /// Abort any in-flight transmission. Drops PTT immediately and signals
@@ -590,9 +622,17 @@ impl TciClient {
                                         self.scp.clone(),
                                     )
                                 });
-                                multi_dec.push_audio(&mono);
+                                // During TX (plus a short hold-off) the RX stream
+                                // carries our own monitor/loopback audio — keep the
+                                // waterfall alive but don't decode or spot it.
+                                let rx_muted = self.rx_muted();
+                                if !rx_muted {
+                                    multi_dec.push_audio(&mono);
+                                }
                                 for frame in sp.push(&mono) {
-                                    multi_dec.push_spectrum(&frame.mags_db, frame.fft_size);
+                                    if !rx_muted {
+                                        multi_dec.push_spectrum(&frame.mags_db, frame.fft_size);
+                                    }
                                     let _ = self.app.emit("spectrum", &frame);
                                 }
 
@@ -616,13 +656,15 @@ impl TciClient {
                                     ));
                                     rtty_gen = cur_gen;
                                 }
-                                let chars = rtty.as_mut().unwrap().push(&mono);
-                                if !chars.is_empty() {
-                                    let _ = self.app.emit("rtty", &chars);
-                                }
-                                if let Some(sc) = scope.as_mut() {
-                                    for f in sc.push(&mono) {
-                                        let _ = self.app.emit("scope", &f);
+                                if !rx_muted {
+                                    let chars = rtty.as_mut().unwrap().push(&mono);
+                                    if !chars.is_empty() {
+                                        let _ = self.app.emit("rtty", &chars);
+                                    }
+                                    if let Some(sc) = scope.as_mut() {
+                                        for f in sc.push(&mono) {
+                                            let _ = self.app.emit("scope", &f);
+                                        }
                                     }
                                 }
                             }
