@@ -287,6 +287,27 @@
     qsyToAbs(abs_hz);
   }
 
+  // Labels are centered on their frequency and can overlap when two spots
+  // sit within a label-width of each other — the top one then swallows
+  // clicks meant for the one underneath. Resolve the click by pointer
+  // position instead of by which element got it: pick the spot (in the same
+  // row) whose center is nearest the click.
+  function pickSpotFromClick(e: MouseEvent, source: "decoder" | "cluster") {
+    const wrap = (e.currentTarget as HTMLElement).parentElement;
+    if (!wrap) return;
+    const rect = wrap.getBoundingClientRect();
+    const frac = Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width));
+    const clickHz = frac * viewSpanHz;
+    let best: Overlay | null = null;
+    for (const o of overlays) {
+      if (o.source !== source) continue;
+      if (!best || Math.abs(o.audio_hz - clickHz) < Math.abs(best.audio_hz - clickHz)) {
+        best = o;
+      }
+    }
+    if (best) pickSpot(best.call, best.abs_hz);
+  }
+
   // QSY to a clicked spot: retune the radio so the signal lands at the
   // user's TX mark tone. In DIGL: vfo_new = signal_abs_hz + txMarkHz.
   // A QSY is a deliberate tuning action, so any AFC drift of the decoder
@@ -703,7 +724,7 @@
         <button
           class="spot-label {o.source}"
           style="left: {pct}%"
-          onclick={() => pickSpot(o.call, o.abs_hz)}
+          onclick={(e) => pickSpotFromClick(e, o.source)}
           title={`Click → load ${o.call} + QSY · ${o.source === "cluster" ? "cluster" : "decoded"} · ${o.audio_hz.toFixed(0)} Hz · ${new Date(o.timestamp_ms).toLocaleTimeString()}${o.comment ? " · " + o.comment : ""}`}
         >
           {o.call}

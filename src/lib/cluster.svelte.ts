@@ -76,7 +76,12 @@ class ClusterStore {
   }
 
   private addSpot(spot: ClusterSpot) {
-    const i = this.spots.findIndex((s) => s.dx_call === spot.dx_call);
+    // Dedupe per call *and* band — the same station spotted on two bands is
+    // two spots (all-bands bandmap shows both), but a re-spot on the same
+    // band replaces the older one.
+    const i = this.spots.findIndex(
+      (s) => s.dx_call === spot.dx_call && s.band === spot.band,
+    );
     if (i >= 0) {
       this.spots = this.spots.map((s, j) => (j === i ? spot : s));
     } else {
