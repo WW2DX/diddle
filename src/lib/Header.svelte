@@ -1,5 +1,6 @@
 <script lang="ts">
   import { onMount, onDestroy } from "svelte";
+  import { getVersion } from "@tauri-apps/api/app";
   import {
     DEFAULT_TCI_URL,
     connect,
@@ -20,11 +21,15 @@
   let error = $state<string | null>(null);
   let now = $state(Date.now());
   let sessionStart = $state<number | null>(null);
+  let version = $state("");
 
   const unlisten: Array<() => void> = [];
   let tick: ReturnType<typeof setInterval>;
 
   onMount(async () => {
+    try {
+      version = await getVersion();
+    } catch {}
     try {
       const [s, r] = await status();
       tci = s;
@@ -83,6 +88,9 @@
 <header class="bar">
   <div class="brand">
     <span class="name">Diddle</span>
+    {#if version}
+      <span class="version">v{version}</span>
+    {/if}
     <span class="tag">RTTY</span>
   </div>
 
@@ -149,6 +157,11 @@
     font-weight: 700;
     letter-spacing: 0.5px;
     font-size: 15px;
+  }
+  .version {
+    color: #8a949d;
+    font-size: 11px;
+    font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
   }
   .tag {
     color: #8a949d;
