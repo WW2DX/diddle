@@ -100,6 +100,8 @@ pub async fn set_rtty_config(
     mark_hz: f32,
     space_hz: f32,
     baud: f32,
+    tx_mark_hz: Option<f32>,
+    tx_space_hz: Option<f32>,
 ) -> Result<(), String> {
     if !(mark_hz > 50.0 && mark_hz < 20_000.0) || !(space_hz > 50.0 && space_hz < 20_000.0) {
         return Err(format!(
@@ -109,10 +111,22 @@ pub async fn set_rtty_config(
     if !(5.0..=300.0).contains(&baud) {
         return Err(format!("baud out of range: {baud}"));
     }
+    // TX tones default to the RX pair when the caller doesn't split them.
+    let tx_mark_hz = tx_mark_hz.unwrap_or(mark_hz);
+    let tx_space_hz = tx_space_hz.unwrap_or(space_hz);
+    if !(tx_mark_hz > 50.0 && tx_mark_hz < 20_000.0)
+        || !(tx_space_hz > 50.0 && tx_space_hz < 20_000.0)
+    {
+        return Err(format!(
+            "tx tones out of range: mark={tx_mark_hz} space={tx_space_hz}"
+        ));
+    }
     let cfg = RttyConfig {
         mark_hz,
         space_hz,
         baud,
+        tx_mark_hz,
+        tx_space_hz,
     };
     state.rtty.set(cfg).await;
     Ok(())

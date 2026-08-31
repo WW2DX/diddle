@@ -317,11 +317,15 @@ impl TciClient {
     async fn transmit_inner(&self, text: String) -> anyhow::Result<()> {
         let cfg = self.rtty.get().await;
         let sr = TX_SAMPLE_RATE;
+        // TX tones are decoupled from the RX pair: AFC may walk the decoder
+        // to follow a drifting station, but our own signal stays where the
+        // operator deliberately tuned it.
+        let (tx_mark, tx_space) = cfg.tx_tones();
 
         info!(
             text_len = text.len(),
-            mark = cfg.mark_hz,
-            space = cfg.space_hz,
+            mark = tx_mark,
+            space = tx_space,
             baud = cfg.baud,
             "tx: starting"
         );
@@ -329,7 +333,7 @@ impl TciClient {
         // Build the full mono waveform up-front: 500 ms mark lead-in +
         // message bits + 200 ms mark trail. The TXChrono handler in the
         // run-loop streams this out as the server requests it.
-        let mut gen = RttyTxGenerator::new(sr, cfg.mark_hz, cfg.space_hz, cfg.baud);
+        let mut gen = RttyTxGenerator::new(sr, tx_mark, tx_space, cfg.baud);
         let lead_in_samples = (sr as usize) / 2;
         let trail_samples = (sr as usize) / 5;
         let mut waveform: Vec<f32> = Vec::new();

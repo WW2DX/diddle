@@ -53,6 +53,25 @@ pub struct RttyConfig {
     pub mark_hz: f32,
     pub space_hz: f32,
     pub baud: f32,
+    /// Transmit tones. Decoupled from the RX pair so AFC can follow a
+    /// drifting station without dragging our own signal around the band;
+    /// only deliberate tuning actions move these.
+    #[serde(default)]
+    pub tx_mark_hz: f32,
+    #[serde(default)]
+    pub tx_space_hz: f32,
+}
+
+impl RttyConfig {
+    /// TX tones, falling back to the RX pair when unset (old callers /
+    /// serialized configs that predate the split).
+    pub fn tx_tones(&self) -> (f32, f32) {
+        if self.tx_mark_hz > 0.0 && self.tx_space_hz > 0.0 {
+            (self.tx_mark_hz, self.tx_space_hz)
+        } else {
+            (self.mark_hz, self.space_hz)
+        }
+    }
 }
 
 impl Default for RttyConfig {
@@ -61,6 +80,8 @@ impl Default for RttyConfig {
             mark_hz: 2125.0,
             space_hz: 2295.0,
             baud: 45.45,
+            tx_mark_hz: 2125.0,
+            tx_space_hz: 2295.0,
         }
     }
 }

@@ -60,11 +60,18 @@
 
   // AFC tracking: when on, every TRACK_INTERVAL_MS we re-center the mark on
   // the strongest peak within ±TRACK_WINDOW_HZ of the current mark. Used to
-  // follow slow drift on real-world signals.
+  // follow slow drift on real-world signals. AFC moves only the decoder;
+  // TX stays where the operator deliberately tuned it unless NET is on
+  // (MMTTY-style: contesters run AFC with NET off so their signal holds still).
   let tracking = $state(false);
+  let net = $state(false);
   const TRACK_INTERVAL_MS = 1500;
   const TRACK_WINDOW_HZ = 40;
   const TRACK_MIN_DELTA_HZ = 2;
+  // Hold AFC still unless the candidate peak is a real signal — without this
+  // gate, clicking a spot whose station has stopped transmitting lets AFC
+  // walk off onto noise or a neighbor, up to 40 Hz per tick.
+  const TRACK_MIN_DB_ABOVE_MEAN = 7;
   let trackTimer: ReturnType<typeof setInterval> | null = null;
 
   let canvas: HTMLCanvasElement;
@@ -281,12 +288,15 @@
   }
 
   // QSY to a clicked spot: retune the radio so the signal lands at the
-  // user's preferred mark tone. In DIGL: vfo_new = signal_abs_hz + markHz.
+  // user's TX mark tone. In DIGL: vfo_new = signal_abs_hz + txMarkHz.
+  // A QSY is a deliberate tuning action, so any AFC drift of the decoder
+  // is discarded — RX re-aligns with TX at the target.
   async function qsyToAbs(abs_hz: number) {
     if (!abs_hz) return;
-    const newVfo = dialForRf(abs_hz, rttyConfig.markHz, rig.mode);
+    const newVfo = dialForRf(abs_hz, rttyConfig.txMarkHz, rig.mode);
     try {
       await setFreq(newVfo);
+      await rttyConfig.setMark(rttyConfig.txMarkHz);
     } catch (e) {
       console.error("set_freq failed", e);
     }
@@ -358,6 +368,14 @@
   let spaceInView = $derived(
     rttyConfig.spaceHz >= 0 && rttyConfig.spaceHz <= viewSpanHz,
   );
+  // TX marker shown only once AFC has walked the decoder away from where
+  // we transmit; otherwise it sits under the RX mark and just adds clutter.
+  let txMarkPct = $derived(pctForAudioHz(rttyConfig.txMarkHz));
+  let txSpacePct = $derived(pctForAudioHz(rttyConfig.txSpaceHz));
+  let txSplit = $derived(Math.abs(rttyConfig.txMarkHz - rttyConfig.markHz) > 2);
+  let txMarkInView = $derived(
+    rttyConfig.txMarkHz >= 0 && rttyConfig.txMarkHz <= viewSpanHz,
+  );
 
   // EMA-smooth incoming spectrum frames so peak picking is stable.
   function updateSmoothed(mags: number[]) {
@@ -428,6 +446,7 @@
   // drift; ignored if there's no peak in the window.
   function trackingTick() {
     if (!smoothedMags || !sampleRate || !lastFftSize) return;
+    if (rig.ptt) return; // our own signal is not a tracking target
     const binHz = sampleRate / lastFftSize;
     const center = rttyConfig.markHz;
     const winBins = Math.max(1, Math.round(TRACK_WINDOW_HZ / binHz));
@@ -454,12 +473,22 @@
         else if (offset > 1) offset = 1;
       }
     }
+    // SNR gate: only follow a peak that stands well clear of the band mean.
+    // On dead air the "strongest bin" is just noise — hold still instead.
+    let mean = 0;
+    for (let i = 0; i < smoothedMags.length; i++) mean += smoothedMags[i];
+    mean /= smoothedMags.length;
+    if (bestDb < mean + TRACK_MIN_DB_ABOVE_MEAN) return;
     const newMark = (bestBin + offset) * binHz;
     if (
       Math.abs(newMark - center) > TRACK_MIN_DELTA_HZ &&
       Math.abs(newMark - center) < TRACK_WINDOW_HZ
     ) {
-      rttyConfig.setMark(Math.round(newMark));
+      if (net) {
+        rttyConfig.setMark(Math.round(newMark));
+      } else {
+        rttyConfig.setRxMark(Math.round(newMark));
+      }
     }
   }
 
@@ -577,10 +606,16 @@
       >
         Auto-tune
       </button>
-      <label class="track-label" title="Continuously re-center mark on the strongest nearby peak">
+      <label class="track-label" title="Continuously re-center the RX mark on the strongest nearby peak. TX stays put unless NET is on.">
         <input type="checkbox" bind:checked={tracking} />
         AFC
       </label>
+      {#if tracking}
+        <label class="track-label" title="Let TX follow the AFC-tracked RX frequency (MMTTY NET). Off = your signal holds still while AFC follows drift.">
+          <input type="checkbox" bind:checked={net} />
+          NET
+        </label>
+      {/if}
       <button class="ghost" onclick={clearCanvas}>Clear</button>
     </div>
   </header>
@@ -685,12 +720,17 @@
         <span class="label">S {rttyConfig.spaceHz.toFixed(0)}</span>
       </div>
     {/if}
+    {#if txSplit && txMarkInView}
+      <div class="marker tx-mark" class:txing={rig.ptt} style="left: {txMarkPct}%">
+        <span class="label">TX {rttyConfig.txMarkHz.toFixed(0)}</span>
+      </div>
+    {/if}
     {#if rig.ptt}
-      <!-- TX uses the same mark/space tones as RX; shade that band + flag it. -->
-      {#if markInView || spaceInView}
+      <!-- Shade the band our TX tones occupy + flag it. -->
+      {#if txMarkInView}
         <div
           class="tx-band"
-          style="left: {Math.min(markPct, spacePct)}%; width: {Math.abs(markPct - spacePct)}%"
+          style="left: {Math.min(txMarkPct, txSpacePct)}%; width: {Math.abs(txMarkPct - txSpacePct)}%"
         ></div>
       {/if}
       <div class="tx-flag">● TX</div>
@@ -869,6 +909,9 @@
   }
   .marker.mark { background: #4ade80; box-shadow: 0 0 4px #4ade80; }
   .marker.space { background: #fbbf24; box-shadow: 0 0 4px #fbbf24; }
+  /* Where we actually transmit, once AFC has moved the RX mark away. */
+  .marker.tx-mark { background: #f87171; box-shadow: 0 0 4px #f87171; }
+  .marker.tx-mark .label { background: #f87171; top: 32px; }
   /* During TX the same tones go out — flag the markers red so it's obvious. */
   .marker.txing { background: #f87171; box-shadow: 0 0 6px #f87171; }
 

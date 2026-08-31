@@ -53,10 +53,11 @@
   let contest = $derived(activeContest());
   let needsExch = $derived(contest.requiresExchange !== false);
   let sentString = $derived(contest.buildSent(qsoLog.nextSerial));
-  // The frequency we log and display is where the *mark tone* sits on the
-  // air (dial − mark in DIGL), which is what other loggers and the cluster
-  // report — not the bare dial reading.
-  let qsoFreqHz = $derived(rfFromAudio(rig.freq, rttyConfig.markHz, rig.mode));
+  // The frequency we log and display is where our *TX mark tone* sits on
+  // the air (dial − mark in DIGL), which is what other loggers and the
+  // cluster report — not the bare dial reading, and not the RX mark, which
+  // AFC may have walked off to follow the other station's drift.
+  let qsoFreqHz = $derived(rfFromAudio(rig.freq, rttyConfig.txMarkHz, rig.mode));
   let band = $derived(bandFromHz(qsoFreqHz));
   // A bare number in the Call field is a frequency (kHz), N1MM/WriteLog
   // style: Enter QSYs the radio there instead of running ESM.
@@ -69,11 +70,13 @@
     !isFreqEntry && call.length >= 3 && (!needsExch || exchRcvd.length > 0),
   );
 
-  // Retune so the typed frequency lands on the mark tone, then clear.
+  // Retune so the typed frequency lands on the TX mark tone, then clear.
+  // A deliberate QSY also re-aligns the decoder with TX, discarding AFC drift.
   async function qsyToTyped() {
     if (!freqEntryHz) return;
     try {
-      await setFreq(dialForRf(freqEntryHz, rttyConfig.markHz, rig.mode));
+      await setFreq(dialForRf(freqEntryHz, rttyConfig.txMarkHz, rig.mode));
+      await rttyConfig.setMark(rttyConfig.txMarkHz);
       clearForm();
     } catch (e) {
       console.error("set_freq failed", e);

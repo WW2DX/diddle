@@ -156,11 +156,13 @@
 
   async function qsyTo(row: BandmapRow) {
     if (!rig.freq) return;
-    // Tune so the signal lands at the user's chosen mark tone. In DIGL
-    // the mark tone is *below* the dial, so the dial goes above the spot.
-    const newVfo = dialForRf(row.freqHz, rttyConfig.markHz, rig.mode);
+    // Tune so the signal lands at the user's TX mark tone. In DIGL the mark
+    // tone is *below* the dial, so the dial goes above the spot. A QSY is a
+    // deliberate tuning action, so the decoder re-aligns with TX too.
+    const newVfo = dialForRf(row.freqHz, rttyConfig.txMarkHz, rig.mode);
     try {
       await setFreq(newVfo);
+      await rttyConfig.setMark(rttyConfig.txMarkHz);
     } catch (e) {
       console.error("set_freq failed", e);
     }

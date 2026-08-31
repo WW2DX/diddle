@@ -274,6 +274,7 @@ impl MultiDecoder {
                 mark_hz: *m,
                 space_hz: *s,
                 baud: 45.45,
+                ..RttyConfig::default()
             };
             let demod = RttyDemod::new(self.sample_rate, cfg);
             new_slots.push(Slot {
