@@ -5,6 +5,21 @@ All notable changes to Diddle are documented here. Format loosely follows
 
 ## [Unreleased]
 
+### Added
+- The app version is shown next to the program name in the top-left header (e.g. `Diddle v0.1.10`), so it's always clear which build is running.
+- **NET** checkbox next to AFC (visible while AFC is on): when checked, TX follows the AFC-tracked RX frequency (the old behavior); default off.
+- When AFC has moved the decoder away from the TX frequency, a red **TX** marker on the waterfall shows where the signal will actually go out.
+
+### Changed
+- **AFC no longer moves your transmit frequency** (MMTTY-style AFC/NET split). AFC tracks only the decoder; the transmitted signal — and the frequency shown in the entry strip and written to the log — stays where you deliberately tuned (waterfall click, auto-tune, typed QSY, bandmap/spot click, each of which re-aligns RX with TX).
+- AFC now holds still on dead air: it only follows a peak that stands well clear of the band noise, so clicking a spot whose station has stopped transmitting no longer lets AFC walk onto noise or a neighbor. It also ignores your own signal while transmitting.
+- The header's big frequency readout now shows the mark-tone RF (what gets logged), matching the entry strip; hover for the raw dial. It previously showed the bare dial, which reads ~2 kHz high in DIGL.
+
+### Fixed
+- Transmitted text no longer comes out garbled in the RX pane: the RX decoder used to keep running during TX, so monitor/loopback audio was decoded and interleaved character-by-character with the TX echo. Decoding now pauses from key-down until shortly after unkey (the waterfall keeps scrolling), and with the noise filter on, TX echo is sequenced behind any RX line still being classified so the scrollback matches the on-air order.
+- Clicking a waterfall callsign label no longer loads a neighboring call when two labels overlap — the click resolves to the spot nearest the pointer.
+- Cluster spots dedupe per call *and* band, so a station spotted on two bands keeps both rows in the all-bands bandmap.
+
 ## [0.1.9] — 2026-08-27
 
 ### Added
