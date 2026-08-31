@@ -12,6 +12,8 @@
     type TciState,
   } from "$lib/tci";
   import { fmtMhz, bandFromHz } from "$lib/bands";
+  import { rfFromAudio } from "$lib/freq";
+  import { rttyConfig } from "$lib/rttyConfig.svelte";
   import { qsoLog } from "$lib/qsoLog.svelte";
 
   let { rig = $bindable() }: { rig: RigState } = $props();
@@ -73,6 +75,14 @@
     }
   });
 
+  // Show the mark-tone RF (where our signal actually sits, and what gets
+  // logged), not the bare dial — the dial reads ~2 kHz off in DIGL and the
+  // mismatch with the entry strip and log confused testers. The dial is
+  // still one hover away.
+  let myFreqHz = $derived(
+    rig.freq ? rfFromAudio(rig.freq, rttyConfig.txMarkHz, rig.mode) : 0,
+  );
+
   let elapsed = $derived.by(() => {
     if (!sessionStart) return "00:00:00";
     const secs = Math.floor((now - sessionStart) / 1000);
@@ -110,8 +120,8 @@
   </div>
 
   <div class="rig">
-    <span class="freq">{fmtMhz(rig.freq)}</span>
-    <span class="band">{bandFromHz(rig.freq)}</span>
+    <span class="freq" title="mark-tone RF · dial {fmtMhz(rig.freq)}">{fmtMhz(myFreqHz)}</span>
+    <span class="band">{bandFromHz(myFreqHz)}</span>
     <span class="mode">{(rig.mode || "—").toUpperCase()}</span>
     <span class="ptt" class:on={rig.ptt}>{rig.ptt ? "TX" : "RX"}</span>
   </div>
