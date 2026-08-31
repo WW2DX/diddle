@@ -310,6 +310,7 @@ fn try_decode(samples: &[f32], sr: u32, mark_hz: f32, space_hz: f32, baud: f32) 
             mark_hz,
             space_hz,
             baud,
+            ..RttyConfig::default()
         },
     );
     d.push(samples)
