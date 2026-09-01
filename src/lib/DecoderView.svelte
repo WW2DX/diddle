@@ -336,6 +336,15 @@
         <span class="dim">Hz</span>
         <span class="space-dot">●</span>
       </span>
+      {#if rttyConfig.markHz !== 2125 || rttyConfig.txMarkHz !== 2125}
+        <button
+          class="shift-btn"
+          onclick={() => rttyConfig.setMark(2125)}
+          title="Reset mark to the RTTY standard 2125 Hz (RX and TX) — so setting the dial to a frequency means the same thing it does for MMTTY et al."
+        >
+          2125
+        </button>
+      {/if}
       <span class="shift-group">
         <span class="dim">shift:</span>
         {#each SHIFT_PRESETS as s}

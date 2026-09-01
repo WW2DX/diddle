@@ -120,7 +120,10 @@
   </div>
 
   <div class="rig">
-    <span class="freq" title="mark-tone RF · dial {fmtMhz(rig.freq)}">{fmtMhz(myFreqHz)}</span>
+    <span class="freq" title="mark-tone RF — where your signal actually sits, and what gets logged">{fmtMhz(myFreqHz)}</span>
+    {#if rig.freq}
+      <span class="dial" title="radio dial (suppressed-carrier reference)">dial {fmtMhz(rig.freq)}</span>
+    {/if}
     <span class="band">{bandFromHz(myFreqHz)}</span>
     <span class="mode">{(rig.mode || "—").toUpperCase()}</span>
     <span class="ptt" class:on={rig.ptt}>{rig.ptt ? "TX" : "RX"}</span>
@@ -249,6 +252,7 @@
     font-weight: 600;
     letter-spacing: 0.5px;
   }
+  .rig .dial { color: #6b7176; font-size: 12px; }
   .rig .band { color: #fbbf24; font-size: 12px; }
   .rig .mode { color: #8a949d; font-size: 12px; }
   .rig .ptt { color: #6b7176; font-weight: 600; }
