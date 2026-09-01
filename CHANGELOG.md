@@ -5,6 +5,8 @@ All notable changes to Diddle are documented here. Format loosely follows
 
 ## [Unreleased]
 
+## [0.1.11] — 2026-09-01
+
 ### Added
 - **2125** reset button in the RX decoder header (shown whenever the mark tone is off-standard): one click snaps mark back to the RTTY-standard 2125 Hz for both RX and TX, so "meet me on 21.090" by dial means the same thing it does for MMTTY-style stations.
 - The header now shows the radio dial alongside the mark-tone RF (e.g. `21.088.102 · dial 21.090.000`) so the ~2 kHz DIGL offset between "where my signal is" and "what the radio reads" is self-explanatory.
