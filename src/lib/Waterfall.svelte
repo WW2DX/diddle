@@ -4,6 +4,7 @@
   import { rttyConfig } from "$lib/rttyConfig.svelte";
   import { spots } from "$lib/spots.svelte";
   import { cluster } from "$lib/cluster.svelte";
+  import { qsoLog } from "$lib/qsoLog.svelte";
   import { entryBus } from "$lib/entry.svelte";
   import { rfFromAudio, audioFromRf, dialForRf } from "$lib/freq";
   import { bandFromHz } from "$lib/bands";
@@ -335,12 +336,16 @@
     source: "decoder" | "cluster";
     timestamp_ms: number;
     comment?: string;
+    worked: boolean; // already in the log on this band → dupe-red label
   };
 
   let overlays = $derived.by<Overlay[]>(() => {
     if (!rig.freq) return [];
     const band = bandFromHz(rig.freq);
     const map = new Map<string, Overlay>();
+    const worked = new Set(
+      qsoLog.qsos.filter((q) => q.band === band).map((q) => q.call.toUpperCase()),
+    );
 
     for (const s of spots.spots) {
       const key = s.call.toUpperCase();
@@ -350,6 +355,7 @@
         abs_hz: rfFromAudio(rig.freq, s.audio_hz, rig.mode),
         source: "decoder",
         timestamp_ms: s.timestamp_ms,
+        worked: worked.has(key),
       });
     }
 
@@ -365,6 +371,7 @@
         source: "cluster",
         timestamp_ms: s.timestamp_ms,
         comment: s.comment,
+        worked: worked.has(key),
       });
     }
 
@@ -726,9 +733,10 @@
       {#if pct >= 0 && pct <= 100}
         <button
           class="spot-label {o.source}"
+          class:worked={o.worked}
           style="left: {pct}%"
           onclick={(e) => pickSpotFromClick(e, o.source)}
-          title={`Click → load ${o.call} + QSY · ${o.source === "cluster" ? "cluster" : "decoded"} · ${o.audio_hz.toFixed(0)} Hz · ${new Date(o.timestamp_ms).toLocaleTimeString()}${o.comment ? " · " + o.comment : ""}`}
+          title={`${o.worked ? "DUPE — already worked on this band · " : ""}Click → load ${o.call} + QSY · ${o.source === "cluster" ? "cluster" : "decoded"} · ${o.audio_hz.toFixed(0)} Hz · ${new Date(o.timestamp_ms).toLocaleTimeString()}${o.comment ? " · " + o.comment : ""}`}
         >
           {o.call}
         </button>
@@ -1069,5 +1077,12 @@
     background: #fbbf24;
     border-color: #fff;
     color: #1a0f00;
+  }
+  /* Already worked on this band — dupe-red, whichever source spotted it. */
+  .spot-label.worked {
+    background: rgba(248, 113, 113, 0.92);
+    color: #1a0606;
+    border-color: #a33;
+    text-decoration: line-through;
   }
 </style>

@@ -93,7 +93,7 @@
 
 <main>
   <Waterfall />
-  <DecoderView />
+  <DecoderView {rig} />
   <EntryWindow {rig} />
   <FKeys />
   <BandmapPanel {rig} />

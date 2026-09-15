@@ -196,7 +196,7 @@
       </button>
       <span class="src-tag cluster">●</span> cluster
       <span class="src-tag decoder">●</span> decoder
-      <span class="src-tag log">●</span> worked
+      <span class="src-tag log">●</span> <span class="worked-key">worked</span>
       <span class="dim">({rows.length})</span>
     </div>
   </header>
@@ -298,6 +298,7 @@
   .src-tag.cluster { color: #4a90e2; }
   .src-tag.decoder { color: #4ade80; }
   .src-tag.log     { color: #6b7176; }
+  .worked-key { color: #f87171; text-decoration: line-through; }
 
   .empty {
     color: #6b7176;
@@ -334,13 +335,15 @@
   }
   .row:last-child { border-bottom: none; }
   .row:hover { background: #1c2024; }
-  .row.worked { opacity: 0.55; }
+  .row.worked { opacity: 0.8; }
 
   .freq { color: #e6e6e6; font-weight: 600; }
   .call { color: #fbbf24; font-weight: 600; letter-spacing: 0.5px; }
   .row.src-cluster .call { color: #92c5fa; }
   .row.src-decoder .call { color: #4ade80; }
-  .row.worked .call { color: #6b7176; text-decoration: line-through; }
+  /* Dupe on this band — red + struck through, matching the entry field,
+     decoder chips, and waterfall labels. */
+  .row.worked .call { color: #f87171; text-decoration: line-through; }
 
   .comment {
     color: #8a949d;

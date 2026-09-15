@@ -1,11 +1,22 @@
 <script lang="ts">
   import { onMount, onDestroy } from "svelte";
-  import { onRtty, onTxEcho, scpContainsAny } from "$lib/tci";
+  import { onRtty, onTxEcho, scpContainsAny, type RigState } from "$lib/tci";
   import { rttyConfig } from "$lib/rttyConfig.svelte";
+  import { qsoLog } from "$lib/qsoLog.svelte";
+  import { bandFromHz } from "$lib/bands";
   import { cluster } from "$lib/cluster.svelte";
   import { settings, HISTORY_MIN, HISTORY_MAX } from "$lib/settings.svelte";
   import { entryBus } from "$lib/entry.svelte";
   import TuningScope from "$lib/TuningScope.svelte";
+
+  let { rig }: { rig: RigState } = $props();
+
+  // Calls already worked on the current band — their chips turn dupe-red so
+  // the operator doesn't grab a station they've logged.
+  let band = $derived(bandFromHz(rig.freq));
+  let workedHere = $derived(
+    new Set(qsoLog.qsos.filter((q) => q.band === band).map((q) => q.call.toUpperCase())),
+  );
 
   // Hard safety ceiling on retained characters, independent of the line-based
   // history setting — guards against a station that never sends a line break.
@@ -419,7 +430,7 @@
     <TuningScope />
     <div class="rx-wrap">
       <div class="rx-text" bind:this={scrollEl} onscroll={onScroll}
-        >{#each segments as seg}{#if seg.call}<button class="call-chip" class:tx={seg.tx} title={`Load ${seg.call} into the entry form`} onclick={() => pickCall(seg.call!)}>{seg.s}</button>{:else}<span class:tx={seg.tx}>{seg.s}</span>{/if}{/each}{#if pendingLine}<span class="pending">{pendingLine}</span>{/if}{#if segments.length === 0 && !pendingLine}{" "}{/if}</div
+        >{#each segments as seg}{#if seg.call}<button class="call-chip" class:tx={seg.tx} class:dupe={workedHere.has(seg.call!)} title={workedHere.has(seg.call!) ? `${seg.call} — already worked on ${band}` : `Load ${seg.call} into the entry form`} onclick={() => pickCall(seg.call!)}>{seg.s}</button>{:else}<span class:tx={seg.tx}>{seg.s}</span>{/if}{/each}{#if pendingLine}<span class="pending">{pendingLine}</span>{/if}{#if segments.length === 0 && !pendingLine}{" "}{/if}</div
       >
       {#if !autoScroll}
         <button class="jump-btn" onclick={jumpToBottom} title="Jump to latest">
@@ -627,6 +638,16 @@
     background: #4ade80;
     color: #07120a;
     outline: none;
+  }
+  /* Worked on this band already. */
+  .rx-text .call-chip.dupe {
+    color: #f87171;
+    background: rgba(248, 113, 113, 0.18);
+  }
+  .rx-text .call-chip.dupe:hover,
+  .rx-text .call-chip.dupe:focus-visible {
+    background: #f87171;
+    color: #1a0606;
   }
 
   /* The in-progress decode line, shown live before it's scored/committed. */

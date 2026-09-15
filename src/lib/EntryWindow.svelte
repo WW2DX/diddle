@@ -434,6 +434,7 @@
       <input
         id="call"
         bind:this={callInput}
+        class:dupe={dupe}
         value={call}
         oninput={onCallInput}
         onkeydown={onKey}
@@ -638,6 +639,12 @@
     font-size: 22px;
     font-weight: 600;
     letter-spacing: 1px;
+  }
+  /* Already worked on this band — the same red used for dupes everywhere. */
+  .call-field input.dupe {
+    color: #f87171;
+    border-color: #f87171;
+    background: #1c0f0f;
   }
 
   .sent {
