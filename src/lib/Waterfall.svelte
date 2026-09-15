@@ -37,8 +37,11 @@
   let rowFrameCount = 0;
 
   // Snap-to-peak: when clicking, find the strongest bin within ±SNAP_HZ
-  // and set mark there. Makes click-to-tune pixel-forgiving.
-  let snapToPeak = $state(true);
+  // and set mark there. Makes click-to-tune pixel-forgiving — but on a
+  // signal that has just stopped (its trace is still on screen) the
+  // strongest bin is noise or a neighbor, so the click lands off
+  // frequency. Off by default; the click goes exactly where you put it.
+  let snapToPeak = $state(false);
   const SNAP_HZ = 150;
   // Cache the most-recent spectrum frame for snap lookups.
   let lastMags: number[] = [];
@@ -673,7 +676,7 @@
           {spanLabel(s)}
         </button>
       {/each}
-      <label class="snap-label">
+      <label class="snap-label" title="Move a click to the strongest peak within ±150 Hz. Off = click sets the mark exactly where you clicked.">
         <input type="checkbox" bind:checked={snapToPeak} />
         snap to peak
       </label>
