@@ -5,6 +5,8 @@ All notable changes to Diddle are documented here. Format loosely follows
 
 ## [Unreleased]
 
+## [0.1.12] — 2026-09-15
+
 ### Added
 - **Dupe coloring everywhere a call can be picked.** A station already logged on the current band turns red: the Call field as you type it, decoded callsign chips in the RX pane, waterfall labels (struck through), and bandmap rows (previously a grey that read like an expired spot).
 - **Clear** button on the bandmap: drops every cluster and decoder spot and hides worked-station rows logged before the clear. The log itself is untouched and new spots keep arriving.
@@ -138,7 +140,10 @@ Initial public release.
 - Spectrum waterfall, crossed-bananas tuning scope, and WAV player for offline decoder testing.
 - Cross-platform installers (macOS, Windows, Linux) built in CI.
 
-[Unreleased]: https://github.com/WW2DX/diddle/compare/v0.1.9...HEAD
+[Unreleased]: https://github.com/WW2DX/diddle/compare/v0.1.12...HEAD
+[0.1.12]: https://github.com/WW2DX/diddle/compare/v0.1.11...v0.1.12
+[0.1.11]: https://github.com/WW2DX/diddle/compare/v0.1.10...v0.1.11
+[0.1.10]: https://github.com/WW2DX/diddle/compare/v0.1.9...v0.1.10
 [0.1.9]: https://github.com/WW2DX/diddle/compare/v0.1.8...v0.1.9
 [0.1.8]: https://github.com/WW2DX/diddle/compare/v0.1.7...v0.1.8
 [0.1.7]: https://github.com/WW2DX/diddle/compare/v0.1.6...v0.1.7
