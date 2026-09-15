@@ -1,6 +1,7 @@
 <script lang="ts">
   import { onMount, onDestroy } from "svelte";
   import { onScope, type ScopeFrame } from "$lib/tci";
+  import { rttyConfig } from "$lib/rttyConfig.svelte";
 
   // Square canvas. Internal resolution; CSS scales to display size.
   const SIZE = 200;
@@ -70,12 +71,61 @@
     unlisten = await onScope(onFrame);
   });
 
-  onDestroy(() => unlisten?.());
+  // Nudge arrows: fine-tune the mark a few Hz at a time while watching the
+  // crossed-bananas display — the manual counterpart to AFC. A deliberate
+  // tuning action, so RX and TX move together (like a waterfall click).
+  // Click = one step; hold = repeat.
+  const NUDGE_HZ = 5;
+  const REPEAT_DELAY_MS = 350;
+  const REPEAT_EVERY_MS = 80;
+  let repeatTimer: ReturnType<typeof setTimeout> | null = null;
+
+  function nudge(dir: -1 | 1) {
+    rttyConfig.setMark(rttyConfig.markHz + dir * NUDGE_HZ);
+  }
+
+  function startNudge(dir: -1 | 1) {
+    stopNudge();
+    nudge(dir);
+    repeatTimer = setTimeout(function tick() {
+      nudge(dir);
+      repeatTimer = setTimeout(tick, REPEAT_EVERY_MS);
+    }, REPEAT_DELAY_MS);
+  }
+
+  function stopNudge() {
+    if (repeatTimer) clearTimeout(repeatTimer);
+    repeatTimer = null;
+  }
+
+  onDestroy(() => {
+    unlisten?.();
+    stopNudge();
+  });
 </script>
 
 <div class="scope">
   <canvas bind:this={canvas} width={SIZE} height={SIZE}></canvas>
   <div class="caption">tuning</div>
+  <div class="nudge">
+    <button
+      type="button"
+      title="Nudge mark down {NUDGE_HZ} Hz (hold to repeat)"
+      onpointerdown={() => startNudge(-1)}
+      onpointerup={stopNudge}
+      onpointerleave={stopNudge}
+      onpointercancel={stopNudge}
+    >◀</button>
+    <span class="hz">{rttyConfig.markHz.toFixed(0)}</span>
+    <button
+      type="button"
+      title="Nudge mark up {NUDGE_HZ} Hz (hold to repeat)"
+      onpointerdown={() => startNudge(1)}
+      onpointerup={stopNudge}
+      onpointerleave={stopNudge}
+      onpointercancel={stopNudge}
+    >▶</button>
+  </div>
 </div>
 
 <style>
@@ -102,4 +152,32 @@
     color: #5a636c;
     pointer-events: none;
   }
+  .nudge {
+    position: absolute;
+    left: 0;
+    right: 0;
+    bottom: 4px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+    font-size: 10px;
+    color: #8a949d;
+  }
+  .nudge .hz { min-width: 34px; text-align: center; color: #c5d1de; }
+  .nudge button {
+    background: rgba(24, 28, 31, 0.85);
+    border: 1px solid #3a4452;
+    color: #8a949d;
+    border-radius: 3px;
+    padding: 1px 7px;
+    font-size: 10px;
+    line-height: 1.4;
+    cursor: pointer;
+    user-select: none;
+    touch-action: none;
+  }
+  .nudge button:hover { color: #c5d1de; border-color: #5a6573; }
+  .nudge button:active { background: #2a3f5f; border-color: #4a90e2; color: #e6e6e6; }
 </style>
