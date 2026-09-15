@@ -6,6 +6,7 @@
   import { cluster } from "$lib/cluster.svelte";
   import { qsoLog } from "$lib/qsoLog.svelte";
   import { entryBus } from "$lib/entry.svelte";
+  import { settings } from "$lib/settings.svelte";
   import { rfFromAudio, audioFromRf, dialForRf } from "$lib/freq";
   import { bandFromHz } from "$lib/bands";
 
@@ -69,6 +70,15 @@
   // (MMTTY-style: contesters run AFC with NET off so their signal holds still).
   let tracking = $state(false);
   let net = $state(false);
+  // AFC follows the Run / S&P mode: on while running (callers land slightly
+  // off your frequency and AFC pulls the decoder onto them), off while
+  // pouncing (you tune to *them*, and a tracker wandering the waterfall
+  // just gets in the way). The checkbox still overrides until the next
+  // mode change.
+  $effect(() => {
+    if (!settings.loaded) return;
+    tracking = !settings.spMode;
+  });
   const TRACK_INTERVAL_MS = 1500;
   const TRACK_WINDOW_HZ = 40;
   const TRACK_MIN_DELTA_HZ = 2;
@@ -637,7 +647,7 @@
       >
         Auto-tune
       </button>
-      <label class="track-label" title="Continuously re-center the RX mark on the strongest nearby peak. TX stays put unless NET is on.">
+      <label class="track-label" title="Continuously re-center the RX mark on the strongest nearby peak. TX stays put unless NET is on. Turns on in Run and off in S&P automatically; tick to override.">
         <input type="checkbox" bind:checked={tracking} />
         AFC
       </label>
