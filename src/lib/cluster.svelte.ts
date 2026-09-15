@@ -102,6 +102,11 @@ class ClusterStore {
   clearLines() {
     this.lines = [];
   }
+
+  /// Drop every spot (the bandmap's "clear"); new ones keep arriving.
+  clearSpots() {
+    this.spots = [];
+  }
 }
 
 export const cluster = new ClusterStore();

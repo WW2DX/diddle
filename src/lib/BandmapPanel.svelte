@@ -33,6 +33,16 @@
   // popping up elsewhere and how busy a band is before you QSY there.
   let allBands = $derived(settings.bandmapAllBands);
 
+  // "Clear" wipes every row: cluster + decoder spots are dropped, and
+  // worked-station rows logged before the clear are hidden (the log itself
+  // is untouched — they're just no longer plotted). Session-only.
+  let clearedAt = $state(0);
+  function clearAll() {
+    cluster.clearSpots();
+    decoderSpots.clear();
+    clearedAt = Date.now();
+  }
+
   let rows = $derived.by<BandmapRow[]>(() => {
     const map = new Map<string, BandmapRow>();
     const band = currentBand;
@@ -45,7 +55,7 @@
 
     // Worked stations (always-on, even when no spots exist)
     for (const q of qsoLog.qsos) {
-      if (!wants(q.band)) continue;
+      if (!wants(q.band) || q.ts <= clearedAt) continue;
       const call = q.call.toUpperCase();
       const key = keyOf(call, q.band);
       if (!map.has(key)) {
@@ -198,6 +208,14 @@
       <span class="src-tag decoder">●</span> decoder
       <span class="src-tag log">●</span> <span class="worked-key">worked</span>
       <span class="dim">({rows.length})</span>
+      <button
+        class="band-toggle"
+        onclick={clearAll}
+        disabled={rows.length === 0}
+        title="Remove every row from the bandmap (spots and worked markers). The log is not affected; new spots keep arriving."
+      >
+        clear
+      </button>
     </div>
   </header>
 
@@ -371,7 +389,8 @@
     cursor: pointer;
     margin-right: 6px;
   }
-  .band-toggle:hover { color: #c5d1de; background: #1c2024; }
+  .band-toggle:hover:not(:disabled) { color: #c5d1de; background: #1c2024; }
+  .band-toggle:disabled { opacity: 0.4; cursor: default; }
   .band-toggle.on { border-color: #4a90e2; color: #92c5fa; }
 
   .cmdline {
