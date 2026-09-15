@@ -5,6 +5,20 @@ All notable changes to Diddle are documented here. Format loosely follows
 
 ## [Unreleased]
 
+### Added
+- **Dupe coloring everywhere a call can be picked.** A station already logged on the current band turns red: the Call field as you type it, decoded callsign chips in the RX pane, waterfall labels (struck through), and bandmap rows (previously a grey that read like an expired spot).
+- **Clear** button on the bandmap: drops every cluster and decoder spot and hides worked-station rows logged before the clear. The log itself is untouched and new spots keep arriving.
+- **Nudge arrows** (◀ ▶) under the tuning scope step the mark 5 Hz at a time; hold to repeat. Moves RX and TX together like a waterfall click.
+- The mark/space markers on the waterfall are now always clearly visible: 2 px lines with a dark halo, plus a shaded strip between the tones (red while keyed) so you can always see where the next transmission will land.
+
+### Changed
+- **AFC follows Run / S&P**: on when running (pulls slightly off-frequency callers onto the decoder), off when pouncing. The checkbox still overrides until the next mode change.
+- **Snap to peak** now defaults off. Clicking a signal that had just stopped transmitting let the snap window pick noise or a neighbor and land the mark off frequency; clicks now go exactly where you put them.
+
+### Fixed
+- Clicking a cluster or decoder row in the bandmap now loads the callsign into the Call field as well as tuning the radio (it previously only tuned).
+- Every plausible callsign in the RX pane is clickable, not only ones SCP knows: calls with a digit-first prefix (4X1ABC, 9A1A, 3DA0RU, 2E0ABC) were never turned into chips.
+
 ## [0.1.11] — 2026-09-01
 
 ### Added
