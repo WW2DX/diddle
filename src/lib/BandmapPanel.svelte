@@ -7,6 +7,7 @@
   import { bandFromHz, fmtMhz } from "$lib/bands";
   import { rfFromAudio, dialForRf } from "$lib/freq";
   import { settings } from "$lib/settings.svelte";
+  import { entryBus } from "$lib/entry.svelte";
 
   let { rig }: { rig: RigState } = $props();
 
@@ -154,7 +155,10 @@
     }
   }
 
+  // Click a row: load its call into the entry form AND QSY onto it — the
+  // same thing a waterfall label click does.
   async function qsyTo(row: BandmapRow) {
+    if (row.call) entryBus.setCall(row.call);
     if (!rig.freq) return;
     // Tune so the signal lands at the user's TX mark tone. In DIGL the mark
     // tone is *below* the dial, so the dial goes above the spot. A QSY is a
@@ -210,7 +214,7 @@
           class:worked={r.worked}
           class:offband={allBands && r.band !== currentBand}
           onclick={() => qsyTo(r)}
-          title={r.comment || `QSY to ${fmtMhz(r.freqHz)}`}
+          title={`Load ${r.call} + QSY to ${fmtMhz(r.freqHz)}${r.comment ? " · " + r.comment : ""}`}
         >
           <span class="src-tag {r.source}">●</span>
           <span class="freq">{fmtMhz(r.freqHz)}{#if allBands}<span class="band-col"> {r.band}</span>{/if}</span>
