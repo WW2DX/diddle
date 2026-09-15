@@ -55,8 +55,12 @@
   ]);
   // Maidenhead grid square (4 or 6 char).
   const GRID_RE = /^[A-R]{2}\d{2}([A-X]{2})?$/;
-  // Callsign shapes — kept liberal; SCP confirms membership.
-  const CALL_RE = /^([A-Z0-9]{1,3}\/)?[A-Z]{1,2}\d{1,3}[A-Z]{1,4}(\/[A-Z0-9]{1,3})?$/;
+  // Callsign shapes — kept liberal so every plausible call is clickable,
+  // not just the ones SCP knows: 1–3 prefix chars (letters or a leading
+  // digit, as in 4X, 9A, 3DA, 2E), a digit, up to 3 more chars, ending in a
+  // letter; optional portable prefix/suffix. Markers (599, CQ, DE…) are
+  // excluded separately. SCP only decides what the noise filter keeps.
+  const CALL_RE = /^([A-Z0-9]{1,3}\/)?[A-Z0-9]{1,3}[0-9][A-Z0-9]{0,3}[A-Z](\/[A-Z0-9]{1,4})?$/;
 
   function appendText(s: string, tx = false) {
     // Coalesce into the trailing run when the kind matches, so a long stream
