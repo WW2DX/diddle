@@ -734,6 +734,16 @@
         </button>
       {/if}
     {/each}
+    <!-- Persistent tone band: the mark/space pair the decoder listens on and
+         (unless AFC has split them) where we transmit. Always on screen so
+         the operator can see where the next TX will land. -->
+    {#if markInView && spaceInView}
+      <div
+        class="tone-band"
+        class:txing={rig.ptt}
+        style="left: {Math.min(markPct, spacePct)}%; width: {Math.abs(markPct - spacePct)}%"
+      ></div>
+    {/if}
     {#if markInView}
       <div class="marker mark" class:txing={rig.ptt} style="left: {markPct}%">
         <span class="label">M {rttyConfig.markHz.toFixed(0)}</span>
@@ -923,21 +933,46 @@
     cursor: crosshair;
   }
 
+  /* Tone markers stay on screen at all times. 2 px wide with a dark halo so
+     they stand out against the green/yellow end of the viridis palette. */
   .marker {
     position: absolute;
     top: 0;
     bottom: 0;
-    width: 1px;
+    width: 2px;
     pointer-events: none;
-    transform: translateX(-0.5px);
+    transform: translateX(-1px);
+    z-index: 1;
   }
-  .marker.mark { background: #4ade80; box-shadow: 0 0 4px #4ade80; }
-  .marker.space { background: #fbbf24; box-shadow: 0 0 4px #fbbf24; }
+  .marker.mark {
+    background: #4ade80;
+    box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.85), 0 0 6px #4ade80;
+  }
+  .marker.space {
+    background: #fbbf24;
+    box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.85), 0 0 6px #fbbf24;
+  }
   /* Where we actually transmit, once AFC has moved the RX mark away. */
-  .marker.tx-mark { background: #f87171; box-shadow: 0 0 4px #f87171; }
+  .marker.tx-mark {
+    background: #f87171;
+    box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.85), 0 0 6px #f87171;
+  }
   .marker.tx-mark .label { background: #f87171; top: 32px; }
   /* During TX the same tones go out — flag the markers red so it's obvious. */
-  .marker.txing { background: #f87171; box-shadow: 0 0 6px #f87171; }
+  .marker.txing {
+    background: #f87171;
+    box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.85), 0 0 8px #f87171;
+  }
+
+  /* Shaded strip between mark and space — always visible, red while keyed. */
+  .tone-band {
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    background: rgba(255, 255, 255, 0.10);
+    pointer-events: none;
+  }
+  .tone-band.txing { background: rgba(248, 113, 113, 0.18); }
 
   .tx-band {
     position: absolute;
