@@ -5,6 +5,8 @@ All notable changes to Diddle are documented here. Format loosely follows
 
 ## [Unreleased]
 
+## [0.1.13] — 2026-09-16
+
 ### Added
 - **Built-in contest simulator** (Test panel at the bottom of the window). Synthesizes a RTTY band and feeds it through the real decoder, so every feature — waterfall, multi-decoder spots, bandmap, entry window, ESM, logging — can be exercised with no radio and no on-air activity. Two modes:
   - **Pileup** (interactive): press F1 and stations answer your CQ; type one's call, send the exchange, and it sends its exchange back; TU completes the QSO and brings the next caller. Stations repeat on `AGN?`, correct you when you copy a call wrong, double over each other in a busy pileup, and walk away if ignored. Your F-keys never key the radio while the simulator runs (the header shows **SIM**).
@@ -152,7 +154,8 @@ Initial public release.
 - Spectrum waterfall, crossed-bananas tuning scope, and WAV player for offline decoder testing.
 - Cross-platform installers (macOS, Windows, Linux) built in CI.
 
-[Unreleased]: https://github.com/WW2DX/diddle/compare/v0.1.12...HEAD
+[Unreleased]: https://github.com/WW2DX/diddle/compare/v0.1.13...HEAD
+[0.1.13]: https://github.com/WW2DX/diddle/compare/v0.1.12...v0.1.13
 [0.1.12]: https://github.com/WW2DX/diddle/compare/v0.1.11...v0.1.12
 [0.1.11]: https://github.com/WW2DX/diddle/compare/v0.1.10...v0.1.11
 [0.1.10]: https://github.com/WW2DX/diddle/compare/v0.1.9...v0.1.10
