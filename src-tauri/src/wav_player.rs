@@ -12,11 +12,9 @@ use tokio::sync::RwLock;
 use tokio::task::JoinHandle;
 use tracing::{info, warn};
 
-use crate::dsp::{MultiDecoder, RttyDemod, RttyTunable, Spectrum, TuningScope};
+use crate::dsp::{RttyTunable, RxPipeline};
 use crate::scp::ScpDb;
 
-const FFT_SIZE: usize = 4096;
-const FFT_STRIDE: usize = 1024;
 // Chunk feeding rate — small enough to keep waterfall smooth, large enough
 // to amortize per-chunk overhead.
 const CHUNK_SAMPLES: usize = 512;
@@ -95,17 +93,12 @@ impl WavPlayer {
 
         let me = self.clone();
         let path_for_task = path.clone();
-        let initial_cfg = self.rtty.get().await;
-        let initial_gen = self.rtty.current_gen();
         let app_for_task = me.app.clone();
         let scp_for_task = me.scp.clone();
+        let rtty_for_task = me.rtty.clone();
         let handle = tokio::spawn(async move {
-            let mut spectrum = Spectrum::new(FFT_SIZE, FFT_STRIDE, sample_rate);
-            let mut rtty = RttyDemod::new(sample_rate, initial_cfg.clone());
-            let mut scope =
-                TuningScope::new(sample_rate, initial_cfg.mark_hz, initial_cfg.space_hz);
-            let mut rtty_gen = initial_gen;
-            let mut multi = MultiDecoder::new(sample_rate, app_for_task, scp_for_task);
+            let mut pipeline =
+                RxPipeline::new(sample_rate, app_for_task, rtty_for_task, scp_for_task).await;
 
             let chunk_dur =
                 Duration::from_micros((CHUNK_SAMPLES as u64 * 1_000_000) / sample_rate as u64);
@@ -122,32 +115,7 @@ impl WavPlayer {
             .await;
 
             for chunk in samples.chunks(CHUNK_SAMPLES) {
-                // Hot-retune the demod if the user clicked a new mark/space.
-                let cur_gen = me.rtty.current_gen();
-                if cur_gen != rtty_gen {
-                    let cfg = me.rtty.get().await;
-                    info!(
-                        mark = cfg.mark_hz,
-                        space = cfg.space_hz,
-                        "wav: retuning demod mid-playback"
-                    );
-                    rtty = RttyDemod::new(sample_rate, cfg.clone());
-                    scope = TuningScope::new(sample_rate, cfg.mark_hz, cfg.space_hz);
-                    rtty_gen = cur_gen;
-                }
-
-                multi.push_audio(chunk);
-                for frame in spectrum.push(chunk) {
-                    multi.push_spectrum(&frame.mags_db, frame.fft_size);
-                    let _ = me.app.emit("spectrum", &frame);
-                }
-                let chars = rtty.push(chunk);
-                if !chars.is_empty() {
-                    let _ = me.app.emit("rtty", &chars);
-                }
-                for f in scope.push(chunk) {
-                    let _ = me.app.emit("scope", &f);
-                }
+                pipeline.push(chunk, false).await;
                 pos += chunk.len();
 
                 // Throttle status to ~5 fps so we don't flood the UI.
