@@ -11,6 +11,7 @@ use crate::log_storage::{self, Qso};
 use crate::scp::{self, ScpStatus};
 use crate::tci::{RigState, TciState};
 use crate::wav_player::WavStatus;
+use crate::audio_input::{AudioDevice, AudioInStatus};
 use crate::AppState;
 
 #[tauri::command]
@@ -70,6 +71,8 @@ pub async fn tci_send(state: State<'_, AppState>, raw: String) -> Result<(), Str
 pub async fn play_wav(state: State<'_, AppState>, path: String) -> Result<(), String> {
     // Best-effort: stop TCI audio. Errors are fine — we may not be connected.
     let _ = state.tci.send("audio_stop:0;".to_string()).await;
+    // Only one test source at a time.
+    state.audio_in.stop().await;
     state
         .wav
         .clone()
@@ -151,6 +154,41 @@ pub async fn transmit(state: State<'_, AppState>, text: String) -> Result<(), St
 #[tauri::command]
 pub async fn tx_abort(state: State<'_, AppState>) -> Result<(), String> {
     state.tci.abort_tx().await.map_err(|e| e.to_string())
+}
+
+// ----- Audio-device input (external RTTY sources, e.g. a simulator) -----
+
+#[tauri::command]
+pub async fn audio_devices() -> Result<Vec<AudioDevice>, String> {
+    tokio::task::spawn_blocking(crate::audio_input::AudioInput::list_devices)
+        .await
+        .map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+pub async fn audio_input_start(
+    state: State<'_, AppState>,
+    device: Option<String>,
+) -> Result<(), String> {
+    let _ = state.tci.send("audio_stop:0;".to_string()).await;
+    state.wav.stop().await;
+    state
+        .audio_in
+        .clone()
+        .start(device)
+        .await
+        .map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+pub async fn audio_input_stop(state: State<'_, AppState>) -> Result<(), String> {
+    state.audio_in.stop().await;
+    Ok(())
+}
+
+#[tauri::command]
+pub async fn audio_input_status(state: State<'_, AppState>) -> Result<AudioInStatus, String> {
+    Ok(state.audio_in.status().await)
 }
 
 #[tauri::command]

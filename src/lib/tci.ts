@@ -125,6 +125,46 @@ export function onWavStatus(
   return listen<WavStatus>("wav:status", (e) => cb(e.payload));
 }
 
+// ----- Audio-device input (external RTTY sources, e.g. a simulator) -----
+
+export interface AudioDevice {
+  name: string;
+  is_default: boolean;
+}
+
+export type AudioInStatus =
+  | { kind: "idle" }
+  | {
+      kind: "running";
+      device: string;
+      sample_rate: number;
+      channels: number;
+      peak: number;
+    }
+  | { kind: "error"; message: string };
+
+export async function audioDevices(): Promise<AudioDevice[]> {
+  return await invoke("audio_devices");
+}
+
+export async function audioInputStart(device: string | null): Promise<void> {
+  await invoke("audio_input_start", { device });
+}
+
+export async function audioInputStop(): Promise<void> {
+  await invoke("audio_input_stop");
+}
+
+export async function audioInputStatus(): Promise<AudioInStatus> {
+  return await invoke("audio_input_status");
+}
+
+export function onAudioInStatus(
+  cb: (s: AudioInStatus) => void,
+): Promise<UnlistenFn> {
+  return listen<AudioInStatus>("audio_in:status", (e) => cb(e.payload));
+}
+
 // ----- Super Check Partial (callsign autocomplete) -----
 
 export interface ScpStatus {

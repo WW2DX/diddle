@@ -10,6 +10,7 @@
   import Logbook from "$lib/Logbook.svelte";
   import CollapsiblePanel from "$lib/CollapsiblePanel.svelte";
   import SettingsPanel from "$lib/SettingsPanel.svelte";
+  import TestPanel from "$lib/TestPanel.svelte";
   import BandmapPanel from "$lib/BandmapPanel.svelte";
   import type { RigState } from "$lib/tci";
   import { qsoLog } from "$lib/qsoLog.svelte";
@@ -101,6 +102,10 @@
 
   <CollapsiblePanel title="Settings — operator + contest" open={false}>
     <SettingsPanel />
+  </CollapsiblePanel>
+
+  <CollapsiblePanel title="Test — audio input, WAV" open={false}>
+    <TestPanel />
   </CollapsiblePanel>
 </main>
 
