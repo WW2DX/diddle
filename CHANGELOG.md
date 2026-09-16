@@ -5,6 +5,9 @@ All notable changes to Diddle are documented here. Format loosely follows
 
 ## [Unreleased]
 
+### Fixed
+- Simulator: a transmission never returned to RX (PTT stayed on until Esc). The TX length was miscounted and scheduled for hours; it is now computed exactly.
+
 ## [0.1.14] — 2026-09-16
 
 ### Fixed

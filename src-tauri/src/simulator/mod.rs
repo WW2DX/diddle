@@ -1046,6 +1046,32 @@ impl World {
     }
 }
 
+/// Timeline of our own transmission: per-character echo points (sample
+/// offset, char) and the total length in samples, lead-in and trail
+/// included. Drains the generator one sample at a time — its idle check
+/// only fires on an exact sample boundary, so coarser steps can miss it
+/// and run to the safety cap (which once left the PTT "on" for hours).
+fn our_tx_timeline(text: &str, mark: f32, space: f32, baud: f32) -> (Vec<(u64, char)>, u64) {
+    let mut gen = RttyTxGenerator::new(SAMPLE_RATE, mark, space, baud);
+    let spb = gen.samples_per_bit();
+    let lead = SAMPLE_RATE as u64 * OUR_LEAD_MS / 1000;
+    let marks: Vec<(u64, char)> = gen
+        .enqueue_with_marks(text)
+        .into_iter()
+        .map(|(bit, c)| (lead + (bit as f32 * spb) as u64, c))
+        .collect();
+    let mut scratch = Vec::with_capacity(1);
+    let mut message = 0u64;
+    let cap = SAMPLE_RATE as u64 * 120;
+    while !gen.is_idle() && message < cap {
+        gen.next_samples(1, &mut scratch);
+        scratch.clear();
+        message += 1;
+    }
+    let total = lead + message + SAMPLE_RATE as u64 * OUR_TRAIL_MS / 1000;
+    (marks, total)
+}
+
 // ---- message templates ------------------------------------------------
 
 fn answer_template(rng: &mut impl Rng, my: &str, call: &str) -> String {
@@ -1337,24 +1363,7 @@ impl Simulator {
     async fn transmit_inner(&self, text: &str) -> anyhow::Result<()> {
         let rcfg = self.rtty.get().await;
         let (mark, space) = rcfg.tx_tones();
-        let mut gen = RttyTxGenerator::new(SAMPLE_RATE, mark, space, rcfg.baud);
-        let spb = gen.samples_per_bit();
-        let lead = SAMPLE_RATE as u64 * OUR_LEAD_MS / 1000;
-        let marks: Vec<(u64, char)> = gen
-            .enqueue_with_marks(text)
-            .into_iter()
-            .map(|(bit, c)| (lead + (bit as f32 * spb) as u64, c))
-            .collect();
-        // Total length: lead + every queued bit + trail. `enqueue_with_marks`
-        // leaves the bits in the generator's queue; count them by draining.
-        let mut scratch = Vec::new();
-        let mut bits = 0u64;
-        while !gen.is_idle() && bits < 400_000 {
-            gen.next_samples(spb.ceil() as usize, &mut scratch);
-            scratch.clear();
-            bits += 1;
-        }
-        let total = lead + (bits as f32 * spb) as u64 + SAMPLE_RATE as u64 * OUR_TRAIL_MS / 1000;
+        let (marks, total) = our_tx_timeline(text, mark, space, rcfg.baud);
 
         {
             let mut guard = self.world.lock().unwrap();
@@ -1572,6 +1581,19 @@ mod tests {
         let mut d = demod();
         let _ = run(&mut w, 4.0, &mut d);
         assert!(w.log.iter().any(|l| l.who == "bg"));
+    }
+
+    #[test]
+    fn our_tx_length_matches_the_message() {
+        let text = "W1AW DE K6AC K6AC K";
+        let (marks, total) = our_tx_timeline(text, 2125.0, 2295.0, 45.45);
+        assert_eq!(marks.len(), text.len());
+        // 19 chars + 4 FIGS/LTRS shifts = 23 frames × 8 bits at 45.45 baud
+        // ≈ 4.0 s, plus lead-in and trail. Anything far outside that means
+        // the length calculation ran away again.
+        let secs = total as f32 / SAMPLE_RATE as f32;
+        assert!((4.0..5.5).contains(&secs), "TX would take {secs} s");
+        assert!(marks.last().unwrap().0 < total);
     }
 
     #[test]
