@@ -453,6 +453,44 @@ impl RttyDemod {
 }
 
 #[cfg(test)]
+mod silence_tests {
+    use super::*;
+    use crate::dsp::RttyTxGenerator;
+
+    /// A message arriving after a stretch of digital silence (virtual
+    /// audio cable, simulator with noise off) must decode in full — the
+    /// noise-floor gate must not be captured by the AGC's onset transient.
+    #[test]
+    fn decodes_after_digital_silence() {
+        let sr = 48_000;
+        for (silence_s, amp) in [(0.4f32, 0.3f32), (1.0, 0.6), (2.5, 0.15), (0.6, 1.0)] {
+            let mut gen = RttyTxGenerator::new(sr, 2125.0, 2295.0, 45.45);
+            let spb = gen.samples_per_bit();
+            let mut wave = vec![0.0f32; (silence_s * sr as f32) as usize];
+            gen.next_samples((8.0 * spb) as usize, &mut wave);
+            gen.enqueue(" W1AW DE K6AC K6AC K ");
+            while !gen.is_idle() {
+                gen.next_samples(1, &mut wave);
+            }
+            gen.next_samples((4.0 * spb) as usize, &mut wave);
+            let n0 = (silence_s * sr as f32) as usize;
+            for s in wave[n0..].iter_mut() {
+                *s *= amp;
+            }
+            let mut demod = RttyDemod::new(sr, RttyConfig::default());
+            let mut out = String::new();
+            for chunk in wave.chunks(512) {
+                out.push_str(&demod.push(chunk));
+            }
+            assert!(
+                out.contains("DE K6AC K6AC K"),
+                "silence={silence_s}s amp={amp}: got {out:?}"
+            );
+        }
+    }
+}
+
+#[cfg(test)]
 mod tests {
     use super::*;
 

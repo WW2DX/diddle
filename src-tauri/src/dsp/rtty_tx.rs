@@ -235,3 +235,41 @@ mod tests {
         assert_eq!(buf.len(), 50);
     }
 }
+
+#[cfg(test)]
+mod loopback_tests {
+    use super::*;
+    use crate::dsp::{RttyConfig, RttyDemod};
+
+    fn roundtrip(text: &str, lead_bits: f32, amp: f32) -> String {
+        let sr = 48_000;
+        let mut gen = RttyTxGenerator::new(sr, 2125.0, 2295.0, 45.45);
+        let spb = gen.samples_per_bit();
+        let mut wave = Vec::new();
+        gen.next_samples((lead_bits * spb) as usize, &mut wave);
+        gen.enqueue(text);
+        while !gen.is_idle() {
+            gen.next_samples(1, &mut wave);
+        }
+        gen.next_samples((4.0 * spb) as usize, &mut wave);
+        for s in wave.iter_mut() {
+            *s *= amp;
+        }
+        let mut demod = RttyDemod::new(sr, RttyConfig::default());
+        let mut out = String::new();
+        for chunk in wave.chunks(512) {
+            out.push_str(&demod.push(chunk));
+        }
+        out
+    }
+
+    #[test]
+    fn generator_output_decodes_with_our_own_demod() {
+        for (lead, amp) in [(8.0, 0.6), (24.0, 0.6), (8.0, 0.2), (48.0, 1.0)] {
+            let got = roundtrip(" CQ TEST DE W1AW W1AW K ", lead, amp);
+            eprintln!("lead={lead} amp={amp} → {got:?}");
+        }
+        let got = roundtrip(" CQ TEST DE W1AW W1AW K ", 24.0, 0.6);
+        assert!(got.contains("W1AW"), "{got:?}");
+    }
+}
