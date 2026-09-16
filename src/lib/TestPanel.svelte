@@ -194,6 +194,10 @@
 
   const DEV_KEY = "diddle.audioInputDevice";
   let devices = $state<AudioDevice[]>([]);
+  // Devices are listed only once you engage this section: enumerating
+  // them is what makes macOS ask for microphone permission, and someone
+  // who only wants the simulator shouldn't be asked.
+  let scanned = $state(false);
   let device = $state<string>("");
   let audioIn = $state<AudioInStatus>({ kind: "idle" });
   let audioError = $state<string | null>(null);
@@ -203,8 +207,10 @@
   );
 
   async function refreshDevices() {
+    audioError = null;
     try {
       devices = await audioDevices();
+      scanned = true;
       if (!device || !devices.some((d) => d.name === device)) {
         device = devices.find((d) => d.is_default)?.name ?? devices[0]?.name ?? "";
       }
@@ -215,6 +221,10 @@
 
   async function startAudio() {
     audioError = null;
+    if (!scanned) {
+      await refreshDevices();
+      if (audioError) return;
+    }
     try {
       localStorage.setItem(DEV_KEY, device);
     } catch {}
@@ -300,7 +310,6 @@
     );
     unlisten.push(await onAudioInStatus((s) => (audioIn = s)));
     unlisten.push(await onWavStatus((s) => (wav = s)));
-    refreshDevices();
   });
 
   onDestroy(() => {
@@ -476,19 +485,25 @@
       </span>
     </header>
     <div class="row">
-      <select bind:value={device} disabled={audioRunning}>
-        {#each devices as d}
-          <option value={d.name}>{d.name}{d.is_default ? " (default)" : ""}</option>
-        {/each}
-        {#if devices.length === 0}
-          <option value="">no input devices found</option>
-        {/if}
-      </select>
-      <button class="ghost" onclick={refreshDevices} disabled={audioRunning} title="Rescan devices">↻</button>
+      {#if scanned}
+        <select bind:value={device} disabled={audioRunning}>
+          {#each devices as d}
+            <option value={d.name}>{d.name}{d.is_default ? " (default)" : ""}</option>
+          {/each}
+          {#if devices.length === 0}
+            <option value="">no input devices found</option>
+          {/if}
+        </select>
+        <button class="ghost" onclick={refreshDevices} disabled={audioRunning} title="Rescan devices">↻</button>
+      {:else}
+        <button class="ghost" onclick={refreshDevices} title="List input devices (macOS asks for microphone access the first time)">
+          Scan input devices…
+        </button>
+      {/if}
       {#if audioRunning}
         <button class="stop" onclick={stopAudio}>Stop</button>
       {:else}
-        <button class="primary" onclick={startAudio} disabled={devices.length === 0}>Start</button>
+        <button class="primary" onclick={startAudio} disabled={scanned && devices.length === 0}>Start</button>
       {/if}
       {#if audioIn.kind === "running"}
         <div class="meter" title="input level">

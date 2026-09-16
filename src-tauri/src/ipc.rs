@@ -168,6 +168,9 @@ pub async fn tx_abort(state: State<'_, AppState>) -> Result<(), String> {
 
 #[tauri::command]
 pub async fn audio_devices() -> Result<Vec<AudioDevice>, String> {
+    if !crate::mic::ensure_access().await {
+        return Err(crate::mic::DENIED_MESSAGE.to_string());
+    }
     tokio::task::spawn_blocking(crate::audio_input::AudioInput::list_devices)
         .await
         .map_err(|e| e.to_string())
@@ -178,6 +181,9 @@ pub async fn audio_input_start(
     state: State<'_, AppState>,
     device: Option<String>,
 ) -> Result<(), String> {
+    if !crate::mic::ensure_access().await {
+        return Err(crate::mic::DENIED_MESSAGE.to_string());
+    }
     let _ = state.tci.send("audio_stop:0;".to_string()).await;
     state.wav.stop().await;
     stop_sim(&state).await;

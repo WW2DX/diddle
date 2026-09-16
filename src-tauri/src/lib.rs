@@ -4,6 +4,7 @@ mod cluster;
 pub mod dsp;
 mod ipc;
 mod log_storage;
+mod mic;
 mod logbook;
 mod scp;
 mod simulator;

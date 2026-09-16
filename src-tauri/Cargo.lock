@@ -820,6 +820,7 @@ name = "diddle"
 version = "0.1.13"
 dependencies = [
  "anyhow",
+ "cc",
  "cpal",
  "futures-util",
  "hound",

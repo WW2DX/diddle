@@ -5,6 +5,9 @@ All notable changes to Diddle are documented here. Format loosely follows
 
 ## [Unreleased]
 
+### Fixed
+- macOS asked for microphone access the moment the Test panel opened, and the prompt could refuse to dismiss. Diddle now asks explicitly (through AVFoundation) only when you scan or start an audio input device, never for the simulator or WAV playback, and reports clearly when access has been denied.
+
 ## [0.1.13] — 2026-09-16
 
 ### Added
