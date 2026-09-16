@@ -16,7 +16,7 @@ Follow the official [Tauri prerequisites](https://v2.tauri.app/start/prerequisit
 
 - **macOS:** Xcode Command Line Tools (`xcode-select --install`).
 - **Windows:** [Microsoft C++ Build Tools](https://visualstudio.microsoft.com/visual-cpp-build-tools/) and the [WebView2 runtime](https://developer.microsoft.com/microsoft-edge/webview2/) (preinstalled on Windows 11).
-- **Linux:** `webkit2gtk`, `libappindicator`, `librsvg`, `patchelf`, etc. (see the Tauri guide for your distro's package names).
+- **Linux:** `webkit2gtk`, `libappindicator`, `librsvg`, `patchelf`, etc. (see the Tauri guide for your distro's package names), plus the ALSA headers (`libasound2-dev` on Debian/Ubuntu, `alsa-lib-devel` on Fedora) for audio-device input.
 
 ## Install dependencies
 
