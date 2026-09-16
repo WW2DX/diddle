@@ -5,6 +5,8 @@ All notable changes to Diddle are documented here. Format loosely follows
 
 ## [Unreleased]
 
+## [0.1.14] — 2026-09-16
+
 ### Fixed
 - macOS asked for microphone access the moment the Test panel opened, and the prompt could refuse to dismiss. Diddle now asks explicitly (through AVFoundation) only when you scan or start an audio input device, never for the simulator or WAV playback, and reports clearly when access has been denied.
 
@@ -157,7 +159,8 @@ Initial public release.
 - Spectrum waterfall, crossed-bananas tuning scope, and WAV player for offline decoder testing.
 - Cross-platform installers (macOS, Windows, Linux) built in CI.
 
-[Unreleased]: https://github.com/WW2DX/diddle/compare/v0.1.13...HEAD
+[Unreleased]: https://github.com/WW2DX/diddle/compare/v0.1.14...HEAD
+[0.1.14]: https://github.com/WW2DX/diddle/compare/v0.1.13...v0.1.14
 [0.1.13]: https://github.com/WW2DX/diddle/compare/v0.1.12...v0.1.13
 [0.1.12]: https://github.com/WW2DX/diddle/compare/v0.1.11...v0.1.12
 [0.1.11]: https://github.com/WW2DX/diddle/compare/v0.1.10...v0.1.11
