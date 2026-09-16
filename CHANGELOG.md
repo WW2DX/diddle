@@ -5,6 +5,18 @@ All notable changes to Diddle are documented here. Format loosely follows
 
 ## [Unreleased]
 
+### Added
+- **Built-in contest simulator** (Test panel at the bottom of the window). Synthesizes a RTTY band and feeds it through the real decoder, so every feature — waterfall, multi-decoder spots, bandmap, entry window, ESM, logging — can be exercised with no radio and no on-air activity. Two modes:
+  - **Pileup** (interactive): press F1 and stations answer your CQ; type one's call, send the exchange, and it sends its exchange back; TU completes the QSO and brings the next caller. Stations repeat on `AGN?`, correct you when you copy a call wrong, double over each other in a busy pileup, and walk away if ignored. Your F-keys never key the radio while the simulator runs (the header shows **SIM**).
+  - **Playback** (scripted): both sides of a run play back-to-back, RTTY Runner style, for pure decoder calibration.
+  - Knobs: callers per CQ, HF noise (atmospheric + QRM + splatter + static, ported from EC5W's RTTY Runner), signal level, caller tone spread, and up to eight background stations elsewhere in the passband that CQ, work people, and QSY over time — so the bandmap and spot tags have something to chew on. Callsigns come from the Super Check Partial database so spots pass the SCP filter; the contest exchange follows the active contest profile (serial, zone + state, state, name + state).
+  - A truth panel shows what each simulated station really sent, and a running log of every simulated transmission, to compare against the decoder.
+  - A pretend dial (band selectable) is shown in the header so QSOs log with a band.
+- **Audio-device input** (Test panel): decode from any system input device — a sound card fed by a radio, or a virtual cable such as BlackHole (macOS) / VB-CABLE (Windows) carrying another program's output. This is how to run an external simulator like RTTY Runner into Diddle: point its output at the virtual cable and select the cable here. Shows a level meter. macOS will ask for microphone permission the first time.
+
+### Changed
+- The WAV player, audio input, and simulator share one RX pipeline (`RxPipeline`), so they behave identically to live TCI audio; starting one test source stops the others and pauses the TCI RX stream.
+
 ## [0.1.12] — 2026-09-15
 
 ### Added

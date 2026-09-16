@@ -57,6 +57,8 @@ To build from source instead, see **[BUILD.md](BUILD.md)**.
 4. **Tune to a RTTY signal.** The decoder view shows demodulated text; the waterfall shows callsign tags from the multi-decoder.
 5. **Work stations.** With **ESM** on, `Enter` steps through CQ → exchange → TU + log automatically.
 
+> **No radio handy?** Open the **Test** panel at the bottom: the built-in **contest simulator** puts a synthetic pileup through the real decoder (press F1 and work what answers), or select an **audio input** device to decode an external source such as [RTTY Runner](https://github.com/opalito/RTTYRunner) routed through a virtual audio cable.
+
 > **Sideband:** Diddle uses **DIGL (LSB)** for RTTY and forces the radio into it on connect — the standard amateur-RTTY sideband. Leave **REV off** for normal signals. (If you operate the opposite sideband, toggle REV in the RX decoder.) Resize the window with **Cmd/Ctrl +/−/0** to fit your screen.
 
 ---
@@ -106,6 +108,7 @@ src/                     SvelteKit frontend
     Logbook.svelte       QSO table + ADIF/Cabrillo export
     BandmapPanel.svelte  DX cluster spots / bandmap
     SettingsPanel.svelte operator + contest config
+    TestPanel.svelte     simulator / audio input / WAV test sources
     TuningScope.svelte   crossed-bananas XY scope
     contests.ts          contest profiles + exchange builders
     exports.ts           ADIF + Cabrillo formatters
@@ -114,11 +117,13 @@ src/                     SvelteKit frontend
 src-tauri/               Rust backend (Tauri)
   src/
     tci/                 TCI protocol + client
-    dsp/                 rtty, rtty_tx, agc, biquad, scope, spectrum, multi_decoder
+    dsp/                 rtty, rtty_tx, agc, biquad, scope, spectrum, multi_decoder, pipeline
     cluster.rs           DX cluster telnet client
     scp.rs               Super Check Partial database
     call_history.rs      N1MM+ call-history file (Exch pre-fill)
     log_storage.rs       QSO log persistence
+    simulator/           built-in contest simulator (pileup + playback, HF noise)
+    audio_input.rs       audio-device capture (virtual cables, sound cards)
     wav_player.rs        WAV playback for decoder testing
     ipc.rs               Tauri command handlers
 .github/workflows/       CI: cross-platform release builds

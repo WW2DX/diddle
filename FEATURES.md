@@ -48,6 +48,12 @@ A complete rundown of what Diddle does today, plus what's planned.
 - **Band derivation** from frequency across 160 m – 2 m.
 - Editable / deletable entries with auto-save.
 
+## Testing without a radio
+
+- **Built-in contest simulator** (Test panel) — a synthetic RTTY band through the real decoder. *Pileup* mode is interactive: CQ brings callers, naming one gets its exchange, TU logs it and brings the next; stations repeat on `AGN?`, correct a mis-copied call, double in a busy pileup, and give up if ignored. *Playback* mode plays a scripted run (RTTY Runner style). Knobs for callers per CQ, HF noise, signal level, tone spread, and background stations elsewhere in the passband (they CQ, work people, and QSY, so spots and the bandmap get exercised). Calls are drawn from SCP; exchanges follow the active contest profile. A truth panel and log show what was really sent. The radio is never keyed while it runs.
+- **Audio-device input** — decode any system input device, e.g. a virtual cable (BlackHole on macOS, VB-CABLE on Windows) carrying an external simulator's output, or a sound card fed by a radio.
+- **WAV playback** — play a recording through the decoder for offline accuracy checks.
+
 ## Contest profiles
 
 Built-in profiles that format your sent exchange and hint the received field:
