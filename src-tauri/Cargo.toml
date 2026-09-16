@@ -44,6 +44,9 @@ rustfft = "6"
 # so external RTTY sources such as a contest simulator can feed the decoder.
 cpal = "0.15"
 
+# Built-in contest simulator (random calls, exchanges, timing, HF noise).
+rand = "0.8"
+
 # HTTP (for fetching MASTER.SCP from supercheckpartial.com). rustls-tls keeps
 # the build self-contained — no system OpenSSL needed on macOS/Linux/Windows.
 reqwest = { version = "0.12", default-features = false, features = ["rustls-tls"] }

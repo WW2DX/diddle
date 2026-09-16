@@ -12,6 +12,7 @@ use crate::scp::{self, ScpStatus};
 use crate::tci::{RigState, TciState};
 use crate::wav_player::WavStatus;
 use crate::audio_input::{AudioDevice, AudioInStatus};
+use crate::simulator::{SimConfig, SimStatus};
 use crate::AppState;
 
 #[tauri::command]
@@ -73,6 +74,7 @@ pub async fn play_wav(state: State<'_, AppState>, path: String) -> Result<(), St
     let _ = state.tci.send("audio_stop:0;".to_string()).await;
     // Only one test source at a time.
     state.audio_in.stop().await;
+    stop_sim(&state).await;
     state
         .wav
         .clone()
@@ -147,12 +149,18 @@ pub async fn load_log(app: tauri::AppHandle) -> Result<Vec<Qso>, String> {
 
 #[tauri::command]
 pub async fn transmit(state: State<'_, AppState>, text: String) -> Result<(), String> {
+    // While the contest simulator runs, "transmitting" talks to the
+    // simulated band and never keys the radio.
+    if state.sim.is_running() {
+        return state.sim.transmit(text).await.map_err(|e| e.to_string());
+    }
     state.tci.transmit(text).await.map_err(|e| e.to_string())
 }
 
 /// Abort any in-flight transmission immediately. No-op if nothing is TXing.
 #[tauri::command]
 pub async fn tx_abort(state: State<'_, AppState>) -> Result<(), String> {
+    state.sim.abort_tx();
     state.tci.abort_tx().await.map_err(|e| e.to_string())
 }
 
@@ -172,6 +180,7 @@ pub async fn audio_input_start(
 ) -> Result<(), String> {
     let _ = state.tci.send("audio_stop:0;".to_string()).await;
     state.wav.stop().await;
+    stop_sim(&state).await;
     state
         .audio_in
         .clone()
@@ -189,6 +198,54 @@ pub async fn audio_input_stop(state: State<'_, AppState>) -> Result<(), String> 
 #[tauri::command]
 pub async fn audio_input_status(state: State<'_, AppState>) -> Result<AudioInStatus, String> {
     Ok(state.audio_in.status().await)
+}
+
+// ----- Built-in contest simulator -----
+
+/// Stop the simulator and put the real rig state back on the header.
+async fn stop_sim(state: &State<'_, AppState>) {
+    if state.sim.is_running() {
+        state.sim.stop().await;
+        let rig = state.tci.rig().await;
+        state.sim.emit_rig_state(&rig);
+    }
+}
+
+#[tauri::command]
+pub async fn sim_start(state: State<'_, AppState>, config: SimConfig) -> Result<(), String> {
+    let _ = state.tci.send("audio_stop:0;".to_string()).await;
+    state.wav.stop().await;
+    state.audio_in.stop().await;
+    state
+        .sim
+        .clone()
+        .start(config)
+        .await
+        .map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+pub async fn sim_stop(state: State<'_, AppState>) -> Result<(), String> {
+    stop_sim(&state).await;
+    Ok(())
+}
+
+#[tauri::command]
+pub async fn sim_status(state: State<'_, AppState>) -> Result<SimStatus, String> {
+    Ok(state.sim.status())
+}
+
+#[tauri::command]
+pub async fn sim_update(
+    state: State<'_, AppState>,
+    noise: Option<f32>,
+    activity: Option<u8>,
+    background: Option<u8>,
+    spread_hz: Option<f32>,
+    signal: Option<f32>,
+) -> Result<(), String> {
+    state.sim.update(noise, activity, background, spread_hz, signal);
+    Ok(())
 }
 
 #[tauri::command]

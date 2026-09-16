@@ -112,6 +112,16 @@ impl ScpDb {
         self.inner.read().unwrap().binary_search(&c).is_ok()
     }
 
+    /// Pick `n` random callsigns (used by the contest simulator so the
+    /// stations it plays are real calls that the spot filter will accept).
+    /// Returns fewer than `n` when the database is small.
+    pub fn sample(&self, n: usize) -> Vec<String> {
+        use rand::seq::SliceRandom;
+        let calls = self.inner.read().unwrap();
+        let mut rng = rand::thread_rng();
+        calls.choose_multiple(&mut rng, n).cloned().collect()
+    }
+
     pub fn search(&self, query: &str, max: usize) -> Vec<String> {
         let q = query.trim().to_ascii_uppercase();
         if q.len() < 2 {

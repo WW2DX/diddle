@@ -165,6 +165,93 @@ export function onAudioInStatus(
   return listen<AudioInStatus>("audio_in:status", (e) => cb(e.payload));
 }
 
+// ----- Built-in contest simulator -----
+
+export type SimExchange = "serial" | "zone" | "state" | "name-state" | "ragchew";
+export type SimMode = "pileup" | "playback";
+
+export interface SimConfig {
+  my_call: string;
+  exchange: SimExchange;
+  mode: SimMode;
+  activity: number; // 1–9 callers per CQ
+  noise: number; // 0..1
+  background: number; // 0–8 other stations in the passband
+  spread_hz: number; // ± caller tone offset
+  signal: number; // 0..1 overall station level
+  dial_hz: number; // pretend rig dial
+  use_scp: boolean;
+}
+
+export interface SimCaller {
+  call: string;
+  exchange: string;
+  offset_hz: number;
+  level: number;
+  status: "calling" | "worked" | "waiting";
+}
+
+export interface SimBg {
+  call: string;
+  mark_hz: number;
+  exchange: string;
+}
+
+export interface SimLogLine {
+  t_ms: number;
+  who: "you" | "dx" | "bg" | "sim";
+  text: string;
+}
+
+export interface SimStatus {
+  running: boolean;
+  mode: SimMode;
+  phase: "idle" | "calling" | "exchanged" | "playback";
+  ptt: boolean;
+  qso_count: number;
+  my_call: string;
+  exchange: SimExchange;
+  callers: SimCaller[];
+  worked: SimCaller | null;
+  background: SimBg[];
+  noise: number;
+  activity: number;
+  spread_hz: number;
+  signal: number;
+  dial_hz: number;
+  log: SimLogLine[];
+}
+
+export async function simStart(config: SimConfig): Promise<void> {
+  await invoke("sim_start", { config });
+}
+
+export async function simStop(): Promise<void> {
+  await invoke("sim_stop");
+}
+
+export async function simStatus(): Promise<SimStatus> {
+  return await invoke("sim_status");
+}
+
+export async function simUpdate(patch: {
+  noise?: number;
+  activity?: number;
+  background?: number;
+  spreadHz?: number;
+  signal?: number;
+}): Promise<void> {
+  await invoke("sim_update", patch);
+}
+
+export function onSimStatus(cb: (s: SimStatus) => void): Promise<UnlistenFn> {
+  return listen<SimStatus>("sim:status", (e) => cb(e.payload));
+}
+
+export function onSimLog(cb: (l: SimLogLine) => void): Promise<UnlistenFn> {
+  return listen<SimLogLine>("sim:log", (e) => cb(e.payload));
+}
+
 // ----- Super Check Partial (callsign autocomplete) -----
 
 export interface ScpStatus {

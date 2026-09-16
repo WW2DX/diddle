@@ -6,6 +6,7 @@ mod ipc;
 mod log_storage;
 mod logbook;
 mod scp;
+mod simulator;
 mod tci;
 mod wav_player;
 
@@ -19,11 +20,13 @@ use crate::call_history::CallHistory;
 use crate::cluster::ClusterClient;
 use crate::dsp::{RttyConfig, RttyTunable};
 use crate::scp::ScpDb;
+use crate::simulator::Simulator;
 
 pub struct AppState {
     pub tci: Arc<TciClient>,
     pub wav: Arc<WavPlayer>,
     pub audio_in: Arc<AudioInput>,
+    pub sim: Arc<Simulator>,
     pub rtty: Arc<RttyTunable>,
     pub scp: Arc<ScpDb>,
     pub cluster: Arc<ClusterClient>,
@@ -49,9 +52,10 @@ pub fn run() {
             let tci = Arc::new(TciClient::new(handle.clone(), rtty.clone(), scp.clone()));
             let wav = Arc::new(WavPlayer::new(handle.clone(), rtty.clone(), scp.clone()));
             let audio_in = Arc::new(AudioInput::new(handle.clone(), rtty.clone(), scp.clone()));
+            let sim = Arc::new(Simulator::new(handle.clone(), rtty.clone(), scp.clone()));
             let cluster = Arc::new(ClusterClient::new(handle));
             let history = Arc::new(CallHistory::new());
-            app.manage(AppState { tci, wav, audio_in, rtty, scp, cluster, history });
+            app.manage(AppState { tci, wav, audio_in, sim, rtty, scp, cluster, history });
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
@@ -68,6 +72,10 @@ pub fn run() {
             ipc::audio_input_start,
             ipc::audio_input_stop,
             ipc::audio_input_status,
+            ipc::sim_start,
+            ipc::sim_stop,
+            ipc::sim_status,
+            ipc::sim_update,
             ipc::get_rtty_config,
             ipc::set_rtty_config,
             ipc::save_log,

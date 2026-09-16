@@ -104,7 +104,7 @@
     <SettingsPanel />
   </CollapsiblePanel>
 
-  <CollapsiblePanel title="Test — audio input, WAV" open={false}>
+  <CollapsiblePanel title="Test — contest simulator, audio input, WAV" open={false}>
     <TestPanel />
   </CollapsiblePanel>
 </main>

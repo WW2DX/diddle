@@ -7,6 +7,8 @@
     disconnect,
     onState,
     onRig,
+    onSimStatus,
+    simStatus,
     status,
     type RigState,
     type TciState,
@@ -24,6 +26,9 @@
   let now = $state(Date.now());
   let sessionStart = $state<number | null>(null);
   let version = $state("");
+  // Built-in contest simulator running: the rig readout is a pretend dial
+  // and F-keys talk to the simulated band, not the radio.
+  let simOn = $state(false);
 
   const unlisten: Array<() => void> = [];
   let tick: ReturnType<typeof setInterval>;
@@ -39,6 +44,10 @@
     } catch {}
     unlisten.push(await onState((s) => (tci = s)));
     unlisten.push(await onRig((r) => (rig = r)));
+    try {
+      simOn = (await simStatus()).running;
+    } catch {}
+    unlisten.push(await onSimStatus((s) => (simOn = s.running)));
     tick = setInterval(() => (now = Date.now()), 1000);
   });
 
@@ -127,6 +136,9 @@
     <span class="band">{bandFromHz(myFreqHz)}</span>
     <span class="mode">{(rig.mode || "—").toUpperCase()}</span>
     <span class="ptt" class:on={rig.ptt}>{rig.ptt ? "TX" : "RX"}</span>
+    {#if simOn}
+      <span class="sim" title="contest simulator running — nothing goes to the radio">SIM</span>
+    {/if}
   </div>
 
   <div class="score">
@@ -256,6 +268,15 @@
   .rig .band { color: #fbbf24; font-size: 12px; }
   .rig .mode { color: #8a949d; font-size: 12px; }
   .rig .ptt { color: #6b7176; font-weight: 600; }
+  .rig .sim {
+    color: #f0c674;
+    border: 1px solid #f0c674;
+    border-radius: 3px;
+    padding: 0 5px;
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: 1px;
+  }
   .rig .ptt.on { color: #f87171; }
 
   .score {
