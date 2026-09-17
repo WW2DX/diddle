@@ -5,6 +5,8 @@ All notable changes to Diddle are documented here. Format loosely follows
 
 ## [Unreleased]
 
+## [0.1.16] — 2026-09-17
+
 ### Changed
 - Simulator playback mode is listen-only: F-keys and ESM no longer key up, echo, or mute the decoder. The scripted run plays both sides, so there is nothing for you to send; just copy and log.
 
@@ -167,7 +169,8 @@ Initial public release.
 - Spectrum waterfall, crossed-bananas tuning scope, and WAV player for offline decoder testing.
 - Cross-platform installers (macOS, Windows, Linux) built in CI.
 
-[Unreleased]: https://github.com/WW2DX/diddle/compare/v0.1.15...HEAD
+[Unreleased]: https://github.com/WW2DX/diddle/compare/v0.1.16...HEAD
+[0.1.16]: https://github.com/WW2DX/diddle/compare/v0.1.15...v0.1.16
 [0.1.15]: https://github.com/WW2DX/diddle/compare/v0.1.14...v0.1.15
 [0.1.14]: https://github.com/WW2DX/diddle/compare/v0.1.13...v0.1.14
 [0.1.13]: https://github.com/WW2DX/diddle/compare/v0.1.12...v0.1.13
