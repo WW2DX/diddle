@@ -1351,6 +1351,20 @@ impl Simulator {
         if text.trim().is_empty() {
             anyhow::bail!("refusing to transmit empty text");
         }
+        // Playback is listen-only: the scripted run plays both sides, so
+        // an F-key has nothing to say to it. Don't key up, don't echo, and
+        // don't mute the RX — just note it in the log.
+        let playback = {
+            let guard = self.world.lock().unwrap();
+            guard.as_ref().map(|w| w.cfg.mode == SimMode::Playback).unwrap_or(false)
+        };
+        if playback {
+            let mut guard = self.world.lock().unwrap();
+            if let Some(w) = guard.as_mut() {
+                w.log("sim", format!("playback mode — nothing sent: {}", text.trim()));
+            }
+            return Ok(());
+        }
         if self.tx_busy.swap(true, Ordering::SeqCst) {
             anyhow::bail!("TX already in progress");
         }
@@ -1581,6 +1595,14 @@ mod tests {
         let mut d = demod();
         let _ = run(&mut w, 4.0, &mut d);
         assert!(w.log.iter().any(|l| l.who == "bg"));
+    }
+
+    #[test]
+    fn playback_ignores_our_tx() {
+        let mut w = world(SimMode::Playback, 1);
+        w.on_our_tx("CQ TEST DE W1AW W1AW K");
+        assert_eq!(w.phase, Phase::Idle);
+        assert!(w.callers.is_empty());
     }
 
     #[test]

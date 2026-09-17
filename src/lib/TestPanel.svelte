@@ -343,7 +343,7 @@
               class:on={simMode === "playback"}
               disabled={simRunning}
               onclick={() => ((simMode = "playback"), saveSimPrefs())}
-              title="Both sides of a run play back-to-back (RTTY Runner style)"
+              title="Both sides of a run play back-to-back (RTTY Runner style); listen and log only — F-keys don't transmit"
             >Playback</button>
           </span>
         </label>
@@ -470,7 +470,8 @@
       <div class="hint dim">
         Pileup: press your CQ key (F1). Stations answer; type one's call and send the exchange,
         then TU — they behave like a real pileup (repeats on AGN?, corrections on a wrong call,
-        walking away if ignored). Your F-keys never key the radio while the simulator runs.
+        walking away if ignored). Playback: listen and log only — F-keys and Enter don't transmit.
+        Your F-keys never key the radio while the simulator runs.
       </div>
     {/if}
   </section>

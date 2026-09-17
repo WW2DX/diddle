@@ -5,6 +5,9 @@ All notable changes to Diddle are documented here. Format loosely follows
 
 ## [Unreleased]
 
+### Changed
+- Simulator playback mode is listen-only: F-keys and ESM no longer key up, echo, or mute the decoder. The scripted run plays both sides, so there is nothing for you to send; just copy and log.
+
 ## [0.1.15] — 2026-09-16
 
 ### Fixed
