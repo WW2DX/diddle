@@ -103,14 +103,22 @@ class MacroState {
     this.save();
   }
 
+  /// Substitute macro tokens. Token names are case-insensitive — `<serial>`
+  /// works the same as `<SERIAL>` — and anything unrecognized is left as
+  /// typed rather than silently swallowed.
   expand(template: string, ctx: { call?: string } = {}): string {
     // Fall back to the entry window's live Call field so macros fired from the
     // F-keys (ESM off, no per-QSO context) still resolve <CALL>.
     const call = ctx.call || entryBus.currentCall || "";
-    return template
-      .replaceAll("<MYCALL>", settings.myCall || "MYCALL")
-      .replaceAll("<CALL>", call)
-      .replaceAll("<SERIAL>", String(qsoLog.nextSerial).padStart(3, "0"));
+    const values: Record<string, string> = {
+      MYCALL: settings.myCall || "MYCALL",
+      CALL: call,
+      SERIAL: String(qsoLog.nextSerial).padStart(3, "0"),
+    };
+    return template.replace(/<([A-Za-z]+)>/g, (tok, name: string) => {
+      const v = values[name.toUpperCase()];
+      return v === undefined ? tok : v;
+    });
   }
 
   /// Send arbitrary text (ad-hoc keyboard send). Runs the same token

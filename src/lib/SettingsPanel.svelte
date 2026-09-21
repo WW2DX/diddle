@@ -437,7 +437,7 @@
       <span class="hint">
         <span class="mono">&lt;MYCALL&gt;</span>
         <span class="mono">&lt;CALL&gt;</span>
-        <span class="mono">&lt;SERIAL&gt;</span> are substituted at send time.
+        <span class="mono">&lt;SERIAL&gt;</span> are substituted at send time (case doesn't matter).
       </span>
       <button class="ghost macro-reset-all" onclick={() => macroState.resetAll()}>
         Reset all
