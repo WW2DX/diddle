@@ -48,10 +48,13 @@ const TRAIL_BITS: f32 = 4.0;
 /// Our own TX: mark lead-in / trail (mirrors the TCI transmitter).
 const OUR_LEAD_MS: u64 = 300;
 const OUR_TRAIL_MS: u64 = 120;
-/// How long callers wait for us before calling again / giving up.
-const CALLERS_TIMEOUT_MS: u64 = 9_000;
-/// How long a worked station waits for our TU before repeating / leaving.
-const EXCH_TIMEOUT_MS: u64 = 10_000;
+/// How long callers wait for us before calling again / giving up. Measured
+/// from the moment the QSO frequency goes quiet — see `qso_busy` — not from
+/// the end of our own transmission, so their own calls don't eat the wait.
+const CALLERS_TIMEOUT_MS: u64 = 6_000;
+/// How long a worked station waits for our TU before repeating / leaving,
+/// again counted from the last thing heard on frequency.
+const EXCH_TIMEOUT_MS: u64 = 7_000;
 /// Minimum gap between status emits.
 const STATUS_MIN_INTERVAL: Duration = Duration::from_millis(100);
 /// Lines kept in the truth log shipped with status.
@@ -266,6 +269,10 @@ struct World {
     worked: Option<Caller>,
     /// Re-call attempts left for the worked station before it walks away.
     worked_patience: u8,
+    /// Sample clock at which the QSO frequency last fell silent. Timeouts
+    /// are measured from here so nobody's patience runs out while we (or
+    /// they) are still transmitting.
+    quiet_since: u64,
     qso_count: u32,
     background: Vec<BgStation>,
     ptt: bool,
@@ -310,6 +317,7 @@ impl World {
             callers: Vec::new(),
             worked: None,
             worked_patience: 0,
+            quiet_since: 0,
             qso_count: 0,
             background: Vec::new(),
             ptt: false,
@@ -450,12 +458,47 @@ impl World {
             self.voice_done(who);
         }
 
+        if self.qso_busy() {
+            self.quiet_since = self.now;
+        }
+
         let level = self.cfg.noise;
         self.noise.add(&mut buf, level);
         for s in buf.iter_mut() {
             *s = s.clamp(-1.0, 1.0);
         }
         (buf, self.ptt)
+    }
+
+    /// Is anybody in the QSO on the air right now — us, the station we're
+    /// working, or a caller (including one whose transmission is already
+    /// scheduled)? Background stations sit elsewhere in the passband and
+    /// don't hold anybody up.
+    fn qso_busy(&self) -> bool {
+        if self.ptt {
+            return true;
+        }
+        let in_qso = |w: Who| matches!(w, Who::Caller(_) | Who::Worked(_));
+        self.voices.iter().any(|v| in_qso(v.who))
+            || self
+                .events
+                .iter()
+                .any(|e| matches!(e.ev, Ev::Say { who, .. } if in_qso(who)))
+    }
+
+    /// A patience timeout only counts silence. If the frequency has been
+    /// busy, put the event back for the remainder and look again — that
+    /// way a station never starts repeating over the top of our TU just
+    /// because we took a second to reach for the key.
+    fn defer_if_busy(&mut self, timeout_ms: u64, ev: Ev) -> bool {
+        let need = self.ms(timeout_ms);
+        let quiet = self.now.saturating_sub(self.quiet_since);
+        if quiet >= need {
+            return false;
+        }
+        let due = self.now + (need - quiet);
+        self.events.push(Event { due, ev });
+        true
     }
 
     fn handle_event(&mut self, ev: Ev) {
@@ -466,6 +509,21 @@ impl World {
                 offset_hz,
                 amp,
             } => {
+                // Hold anybody in the QSO off while we're transmitting:
+                // they'd hear us and wait. (Background stations elsewhere
+                // in the passband go ahead — they can't hear us at all.)
+                if self.ptt && matches!(who, Who::Caller(_) | Who::Worked(_)) {
+                    self.schedule(
+                        150,
+                        Ev::Say {
+                            who,
+                            text,
+                            offset_hz,
+                            amp,
+                        },
+                    );
+                    return;
+                }
                 // Skip if the station has meanwhile left the pileup.
                 let alive = match who {
                     Who::Caller(id) => self.callers.iter().any(|c| c.id == id),
@@ -479,11 +537,17 @@ impl World {
             }
             Ev::CallersTimeout { epoch } => {
                 if self.phase == Phase::Calling && epoch == self.epoch {
+                    if self.defer_if_busy(CALLERS_TIMEOUT_MS, Ev::CallersTimeout { epoch }) {
+                        return;
+                    }
                     self.callers_recall("no answer");
                 }
             }
             Ev::ExchTimeout { epoch } => {
                 if self.phase == Phase::Exchanged && epoch == self.epoch {
+                    if self.defer_if_busy(EXCH_TIMEOUT_MS, Ev::ExchTimeout { epoch }) {
+                        return;
+                    }
                     if self.worked_patience > 0 {
                         self.worked_patience -= 1;
                         self.worked_repeat();
@@ -1474,6 +1538,29 @@ mod tests {
         RttyDemod::new(SAMPLE_RATE, RttyConfig::default())
     }
 
+    /// Transmit the way the app does: key up, let the world run for as long
+    /// as the message takes on the air, key down, then react to the text.
+    fn our_tx(w: &mut World, text: &str, d: &mut RttyDemod) {
+        let (_, total) = our_tx_timeline(text, 2125.0, 2295.0, 45.45);
+        w.ptt = true;
+        let _ = run(w, total as f32 / SAMPLE_RATE as f32, d);
+        w.ptt = false;
+        w.on_our_tx(text);
+    }
+
+    fn dx_lines(w: &World) -> usize {
+        w.log.iter().filter(|l| l.who == "dx").count()
+    }
+
+    /// Run until the QSO frequency is quiet (or `limit` seconds pass).
+    fn run_until_quiet(w: &mut World, limit: f32, d: &mut RttyDemod) {
+        let mut waited = 0.0;
+        while waited < limit && (w.voices.is_empty() || w.qso_busy()) {
+            let _ = run(w, 0.1, d);
+            waited += 0.1;
+        }
+    }
+
     #[test]
     fn cq_brings_callers_and_the_audio_decodes() {
         let mut w = world(SimMode::Pileup, 1);
@@ -1556,6 +1643,46 @@ mod tests {
         );
     }
 
+    /// The station we just worked must not start repeating its exchange
+    /// on top of our TU. Its patience counts silence, so hesitating at the
+    /// keyboard — and then spending four seconds on the air — never lets
+    /// the timeout land in the middle of our transmission.
+    #[test]
+    fn worked_station_stays_off_the_air_during_our_tu() {
+        let mut w = world(SimMode::Pileup, 1);
+        let mut d = demod();
+        let mut tries = 0;
+        while w.callers.is_empty() && tries < 12 {
+            w.on_our_tx("CQ TEST DE W1AW W1AW K");
+            tries += 1;
+        }
+        w.callers.truncate(1);
+        let call = w.callers[0].st.call.clone();
+        w.on_our_tx(&format!("{call} 599 001 001 K"));
+        assert_eq!(w.phase, Phase::Exchanged);
+
+        // Hear its exchange out, then hesitate until a second before its
+        // patience would run out — the timeout now falls inside our TU.
+        run_until_quiet(&mut w, 15.0, &mut d);
+        let _ = run(&mut w, EXCH_TIMEOUT_MS as f32 / 1000.0 - 1.0, &mut d);
+        let before = dx_lines(&w);
+        let ptt_down = w.now;
+
+        our_tx(&mut w, "TU 73 DE W1AW CQ", &mut d);
+        assert!(
+            w.log
+                .iter()
+                .filter(|l| l.who == "dx")
+                .count()
+                == before,
+            "nobody should transmit while our PTT is down; log: {:?}",
+            w.log.iter().skip(before).map(|l| l.text.clone()).collect::<Vec<_>>()
+        );
+        assert!(w.now > ptt_down, "our TX should have taken time");
+        assert_eq!(w.qso_count, 1, "TU should have closed the QSO");
+        assert!(w.worked.is_none());
+    }
+
     #[test]
     fn ignored_callers_eventually_leave() {
         let mut w = world(SimMode::Pileup, 2);
@@ -1566,7 +1693,9 @@ mod tests {
             tries += 1;
         }
         // Say nothing for a long time: two recalls, then everyone gives up.
-        let _ = run(&mut w, 40.0, &mut d);
+        // Each cycle is one round of calls plus CALLERS_TIMEOUT_MS of
+        // silence, so allow for three of them comfortably.
+        let _ = run(&mut w, 70.0, &mut d);
         assert_eq!(w.phase, Phase::Idle);
         assert!(w.callers.is_empty());
     }
