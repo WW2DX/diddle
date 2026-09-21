@@ -5,6 +5,8 @@ All notable changes to Diddle are documented here. Format loosely follows
 
 ## [Unreleased]
 
+## [0.1.17] — 2026-09-21
+
 ### Fixed
 - Simulator pileup: the station you just worked could start repeating its exchange in the middle of your TU, so it was still on the air when your macro ended. Patience timeouts now count *silence* on the QSO frequency — they no longer run down while the other station is sending its exchange or while your PTT is down — and no caller or worked station keys up while you are transmitting. Hesitating a second or two before TU is fine again.
 - Macro tokens are case-insensitive: `<serial>` now expands the same as `<SERIAL>` instead of being sent literally. Unknown tokens are still passed through as typed.
