@@ -267,7 +267,8 @@
         <span>ESM (Enter Sends Message)</span>
       </label>
       <span class="hint">
-        Run-mode Enter cycles: empty→CQ, call→Excg, both→TU+Log
+        Run: empty→CQ, call→Excg, his exch→TU+Log. S&amp;P: call→your call,
+        his exch→Excg+Log (he sends the TU).
       </span>
     </div>
   </div>

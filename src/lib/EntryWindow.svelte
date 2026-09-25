@@ -22,6 +22,8 @@
   // to the log step even when the received exchange is optional (S&P, or the
   // General QSO profile). Reset whenever we move on to a new callsign.
   let exchSent = $state(false);
+  // S&P: whether we've thrown our call at him yet. Reset with `exchSent`.
+  let callSent = $state(false);
   // True while Exch holds a value pre-filled from the call-history file (and
   // not yet edited by the operator). Lets a call change replace/clear it.
   let exchFromHistory = $state(false);
@@ -127,8 +129,11 @@
   // to skip the exchange and send TU to a station we had said nothing to.
   //
   //   S&P:   call, no exch → F4 (send our call) + focus Exch
-  //          call + exch   → F2 (send our exchange)
-  //          (again)       → F3 (TU) + log
+  //          call + exch   → F2 (send our exchange) + log
+  //
+  // S&P stops there, N1MM-style: the TU is the running station's to send,
+  // and ours (F3) ends in CQ — which on his run frequency is the last
+  // thing anybody wants.
   async function esmEnter() {
     const c = normalizeCall(call);
     const ex = exchRcvd.trim();
@@ -136,14 +141,14 @@
     if (settings.spMode) {
       // Search & Pounce — nothing to send until we've grabbed a call.
       if (c.length === 0) return;
-      if (!exchSent && ex.length === 0) {
+      if (!callSent || (needsExch && ex.length === 0)) {
+        // Our call — and again on each Enter until he comes back to us.
         await macroState.fire("F4", { call: c }); // "DE <MYCALL>"
+        callSent = true;
         queueMicrotask(() => exchInput?.focus());
-      } else if (!exchSent) {
+      } else {
         await macroState.fire("F2", { call: c }); // our exchange
         exchSent = true;
-      } else {
-        await macroState.fire("F3"); // TU
         logQso();
       }
       return;
@@ -178,9 +183,9 @@
     }
     if (settings.spMode) {
       if (!hasCall) return { cls: "idle", label: "S&P · enter a call" };
-      if (!exchSent && !hasExch) return { cls: "cq", label: "S&P · ↵ Call" };
-      if (!exchSent) return { cls: "excg", label: "S&P · ↵ Excg" };
-      return { cls: "tu", label: "S&P · ↵ TU+Log" };
+      if (!callSent || (needsExch && !hasExch))
+        return { cls: "cq", label: "S&P · ↵ Call" };
+      return { cls: "tu", label: "S&P · ↵ Excg+Log" };
     }
     if (!hasCall) return { cls: "cq", label: "Run · ↵ CQ" };
     if (!exchSent || (needsExch && !hasExch))
@@ -207,6 +212,7 @@
     call = c;
     exchRcvd = "";
     exchSent = false;
+    callSent = false;
     exchFromHistory = false;
     suggestions = [];
     suggestionIdx = -1;
@@ -246,6 +252,7 @@
     exchRcvd = "";
     rstRcvd = "599";
     exchSent = false;
+    callSent = false;
     exchFromHistory = false;
     queueMicrotask(() => callInput?.focus());
   }
@@ -255,6 +262,7 @@
     exchRcvd = "";
     rstRcvd = "599";
     exchSent = false;
+    callSent = false;
     exchFromHistory = false;
     callInput?.focus();
   }
@@ -272,6 +280,7 @@
     call = normalizeEntry(t.value);
     // Editing the callsign means a new station — restart the ESM sequence.
     exchSent = false;
+    callSent = false;
     if (/^[0-9.]+$/.test(call)) {
       suggestions = [];
       suggestionIdx = -1;

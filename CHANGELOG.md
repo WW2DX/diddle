@@ -8,6 +8,9 @@ All notable changes to Diddle are documented here. Format loosely follows
 ### Fixed
 - **ESM in Run mode sent TU instead of your exchange** when the Exch field was pre-filled from the call-history file (CQ WW zone/state, NAQP name/state) — so the first Enter thanked a station you had said nothing to. The Run steps now follow what you have actually sent, not whether Exch happens to hold something. A bare Enter while you're still waiting for his exchange re-sends yours, the way an F-key repeat would.
 
+### Changed
+- **ESM in Search & Pounce is two steps now**, N1MM-style: Enter sends your call (and again on each Enter until he comes back), then — once you've copied his exchange — Enter sends your exchange and logs the QSO. The old third step sent TU, which in S&P is the running station's to send, and did it with F3, whose default ends in `CQ` — calling CQ on his run frequency. The phase chip reads `S&P · ↵ Call` then `S&P · ↵ Excg+Log`.
+
 ## [0.1.17] — 2026-09-21
 
 ### Fixed
