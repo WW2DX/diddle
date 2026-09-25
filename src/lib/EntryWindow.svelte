@@ -122,6 +122,10 @@
   //          call  → F2 (send exchange) + focus Exch
   //          +exch → F3 (TU) + log
   //
+  // The Run steps turn on `exchSent`, not on whether Exch happens to hold
+  // something: a call-history pre-fill (CQ WW zone, NAQP name/state) used
+  // to skip the exchange and send TU to a station we had said nothing to.
+  //
   //   S&P:   call, no exch → F4 (send our call) + focus Exch
   //          call + exch   → F2 (send our exchange)
   //          (again)       → F3 (TU) + log
@@ -148,11 +152,9 @@
     // Run.
     if (c.length === 0) {
       await macroState.fire("F1");
-    } else if (needsExch && ex.length === 0) {
-      await macroState.fire("F2", { call: c });
-      queueMicrotask(() => exchInput?.focus());
-    } else if (!needsExch && !exchSent) {
-      // Ragchew: send our info, then a second Enter logs (exch optional).
+    } else if (!exchSent || (needsExch && ex.length === 0)) {
+      // Our exchange — and again on a bare Enter while we're still waiting
+      // for his, which is how you ask for a repeat without an F-key.
       await macroState.fire("F2", { call: c });
       exchSent = true;
       queueMicrotask(() => exchInput?.focus());
@@ -181,8 +183,8 @@
       return { cls: "tu", label: "S&P · ↵ TU+Log" };
     }
     if (!hasCall) return { cls: "cq", label: "Run · ↵ CQ" };
-    if (needsExch && !hasExch) return { cls: "excg", label: "Run · ↵ Excg" };
-    if (!needsExch && !exchSent) return { cls: "excg", label: "Run · ↵ Excg" };
+    if (!exchSent || (needsExch && !hasExch))
+      return { cls: "excg", label: "Run · ↵ Excg" };
     return { cls: "tu", label: "Run · ↵ TU+Log" };
   });
 
