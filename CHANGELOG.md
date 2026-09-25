@@ -5,6 +5,8 @@ All notable changes to Diddle are documented here. Format loosely follows
 
 ## [Unreleased]
 
+## [0.1.19] — 2026-09-25
+
 ### Fixed
 - **ESM in Search & Pounce did nothing on Enter with an empty Call field.** It now sends your call (F4), N1MM-style, so you can answer a CQ before you've copied who it is; focus stays in Call for typing his when he comes back, and the next Enter with his call and exchange filled in sends your exchange and logs. Typing a call into an empty field no longer restarts the sequence, so that blind call isn't sent twice. The phase chip reads `S&P · ↵ Call` from the start instead of "enter a call".
 
