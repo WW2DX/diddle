@@ -128,7 +128,9 @@
   // something: a call-history pre-fill (CQ WW zone, NAQP name/state) used
   // to skip the exchange and send TU to a station we had said nothing to.
   //
-  //   S&P:   call, no exch → F4 (send our call) + focus Exch
+  //   S&P:   empty         → F4 (send our call) — jump in on a CQ before
+  //                          we've copied who it is; Call keeps focus
+  //          call, no exch → F4 (send our call) + focus Exch
   //          call + exch   → F2 (send our exchange) + log
   //
   // S&P stops there, N1MM-style: the TU is the running station's to send,
@@ -139,9 +141,13 @@
     const ex = exchRcvd.trim();
 
     if (settings.spMode) {
-      // Search & Pounce — nothing to send until we've grabbed a call.
-      if (c.length === 0) return;
-      if (!callSent || (needsExch && ex.length === 0)) {
+      if (c.length === 0) {
+        // Search & Pounce, blind: answer his CQ with our call and stay in
+        // the Call field to type his when he comes back.
+        await macroState.fire("F4"); // "DE <MYCALL>"
+        callSent = true;
+        queueMicrotask(() => callInput?.focus());
+      } else if (!callSent || (needsExch && ex.length === 0)) {
         // Our call — and again on each Enter until he comes back to us.
         await macroState.fire("F4", { call: c }); // "DE <MYCALL>"
         callSent = true;
@@ -182,8 +188,7 @@
       };
     }
     if (settings.spMode) {
-      if (!hasCall) return { cls: "idle", label: "S&P · enter a call" };
-      if (!callSent || (needsExch && !hasExch))
+      if (!hasCall || !callSent || (needsExch && !hasExch))
         return { cls: "cq", label: "S&P · ↵ Call" };
       return { cls: "tu", label: "S&P · ↵ Excg+Log" };
     }
@@ -277,10 +282,15 @@
 
   function onCallInput(e: Event) {
     const t = e.target as HTMLInputElement;
+    const prev = call;
     call = normalizeEntry(t.value);
-    // Editing the callsign means a new station — restart the ESM sequence.
-    exchSent = false;
-    callSent = false;
+    // Editing an existing callsign means a new station — restart the ESM
+    // sequence. Filling an empty field doesn't: in S&P we may already have
+    // sent our call blind, and typing his now doesn't make him a new station.
+    if (prev.length > 0) {
+      exchSent = false;
+      callSent = false;
+    }
     if (/^[0-9.]+$/.test(call)) {
       suggestions = [];
       suggestionIdx = -1;
