@@ -33,7 +33,7 @@ A complete rundown of what Diddle does today, plus what's planned.
 ## Macros & keyboard workflow
 
 - **8 editable macros (F1–F8)** with sensible RTTY contest defaults (CQ, exchange, TU, repeat, AGN, BRK, 73…).
-- **ESM — Enter Sends Message** (N1MM-style stepped Enter): empty → CQ, call entered → exchange, call+exch → TU + log. The ESM chip shows what `Enter` will do next.
+- **ESM — Enter Sends Message** (N1MM-style stepped Enter). Run: empty → CQ (F1), call entered → his call + your exchange (F2) and focus jumps to Exch, call+exch → TU (F3) + log. Search & Pounce: empty or call-only → your call (F4), call+exch → your exchange (F2) + log. The ESM chip shows what `Enter` will do next; with ESM off, `Enter` only logs and you move between fields yourself.
 - **Frequency in the Call field** — type `14080` (kHz) and press `Enter` to QSY the radio so the signal lands on your mark tone.
 - **Call History pre-fill** — load an N1MM+ Call History file and the received exchange is filled in the moment a known call is typed or grabbed (contest-aware: Name + State for NAQP, State for Roundup, Zone + State for CQ WW).
 - **Saved contest setups** — contest + F-key messages + call-history file stored under a name; pick one to bring a previous contest's configuration back.

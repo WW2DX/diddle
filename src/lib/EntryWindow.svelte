@@ -24,6 +24,11 @@
   let exchSent = $state(false);
   // S&P: whether we've thrown our call at him yet. Reset with `exchSent`.
   let callSent = $state(false);
+  // The callsign we last transmitted under (F2 in Run, F4 with a call in
+  // S&P). Editing the Call field to something else means a new station and
+  // restarts the sequence; typing into an empty field — including after a
+  // blind S&P call, which went out with no callsign at all — does not.
+  let sentCall = $state("");
   // True while Exch holds a value pre-filled from the call-history file (and
   // not yet edited by the operator). Lets a call change replace/clear it.
   let exchFromHistory = $state(false);
@@ -151,6 +156,7 @@
         // Our call — and again on each Enter until he comes back to us.
         await macroState.fire("F4", { call: c }); // "DE <MYCALL>"
         callSent = true;
+        sentCall = c;
         queueMicrotask(() => exchInput?.focus());
       } else {
         await macroState.fire("F2", { call: c }); // our exchange
@@ -168,6 +174,7 @@
       // for his, which is how you ask for a repeat without an F-key.
       await macroState.fire("F2", { call: c });
       exchSent = true;
+      sentCall = c;
       queueMicrotask(() => exchInput?.focus());
     } else {
       await macroState.fire("F3");
@@ -214,10 +221,9 @@
     lastBusToken = t;
     const c = normalizeCall(entryBus.requestedCall);
     if (!c) return;
+    noteCallChanged(c);
     call = c;
     exchRcvd = "";
-    exchSent = false;
-    callSent = false;
     exchFromHistory = false;
     suggestions = [];
     suggestionIdx = -1;
@@ -230,6 +236,18 @@
       .toUpperCase()
       .replace(/[^A-Z0-9\/]/g, "")
       .slice(0, 12);
+  }
+
+  // A callsign other than the one we've already transmitted under is a new
+  // station: restart the ESM sequence. Nothing sent under a callsign yet
+  // (fresh form, or a blind S&P call) → nothing to restart, so typing his
+  // call in doesn't make Enter send ours a second time.
+  function noteCallChanged(c: string) {
+    if (sentCall && c !== sentCall) {
+      exchSent = false;
+      callSent = false;
+      sentCall = "";
+    }
   }
 
   function logQso() {
@@ -258,6 +276,7 @@
     rstRcvd = "599";
     exchSent = false;
     callSent = false;
+    sentCall = "";
     exchFromHistory = false;
     queueMicrotask(() => callInput?.focus());
   }
@@ -268,6 +287,7 @@
     rstRcvd = "599";
     exchSent = false;
     callSent = false;
+    sentCall = "";
     exchFromHistory = false;
     callInput?.focus();
   }
@@ -282,15 +302,8 @@
 
   function onCallInput(e: Event) {
     const t = e.target as HTMLInputElement;
-    const prev = call;
     call = normalizeEntry(t.value);
-    // Editing an existing callsign means a new station — restart the ESM
-    // sequence. Filling an empty field doesn't: in S&P we may already have
-    // sent our call blind, and typing his now doesn't make him a new station.
-    if (prev.length > 0) {
-      exchSent = false;
-      callSent = false;
-    }
+    noteCallChanged(call);
     if (/^[0-9.]+$/.test(call)) {
       suggestions = [];
       suggestionIdx = -1;

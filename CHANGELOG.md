@@ -5,6 +5,9 @@ All notable changes to Diddle are documented here. Format loosely follows
 
 ## [Unreleased]
 
+### Fixed
+- **ESM in Search & Pounce sent your call again instead of your exchange.** After a blind Enter on an empty Call field (F4), typing his call reset the sequence on every keystroke after the first, so Enter with his call and exchange filled in sent F4 a second time. The sequence now restarts only when the Call field is changed to a callsign other than the one you have already transmitted under; typing into an empty field, or grabbing a call from the decoder after a blind call, continues it. S&P is two Enters again: empty Call → your call; his call and exchange in → your exchange (F2) and log.
+
 ## [0.1.19] — 2026-09-25
 
 ### Fixed
