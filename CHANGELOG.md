@@ -5,6 +5,17 @@ All notable changes to Diddle are documented here. Format loosely follows
 
 ## [Unreleased]
 
+## [0.1.21] — 2026-09-27
+
+### Added
+- **Log It: `Ctrl+Enter`** logs whatever is in Call and Exch right now, sending nothing — the same as Enter with ESM off, from any focus. The Log button (now labelled *Log it · Ctrl+↵*) does the same. It's the way out when an ESM sequence gets out of step and the QSO would otherwise be lost.
+- **Correct the last exchange from `Ctrl+Q`.** `Tab` in the quick-edit popup switches between the logged call and the received exchange; `↑`/`↓` still steps to older QSOs.
+- **Tune from the waterfall like the radio's dial.** Mouse wheel over the waterfall retunes the rig 10 Hz per step (100 Hz with `Shift`); wheel up is dial up. With the waterfall focused, `←`/`→` slide the signals left/right.
+
+### Fixed
+- **AFC walked away from your run frequency** before anyone called, following a neighbor or splatter up to 40 Hz per tick and never coming back. AFC now only looks within ±15 Hz of your TX mark and snaps the decoder back to it every time you unkey, so it still pulls in a caller who is a few Hz off without drifting onto the station next door.
+- **The rig could sit in USB or DIGU after the RHR Console changed the mode** (spectrum clicks, band changes), swapping mark and space so the decoder printed garbage until your next transmission. Diddle now puts DIGL back as soon as the rig reports another mode (at most once every 2 s, so a radio that refuses can't ping-pong).
+
 ## [0.1.20] — 2026-09-26
 
 ### Fixed

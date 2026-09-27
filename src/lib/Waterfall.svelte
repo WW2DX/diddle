@@ -7,7 +7,7 @@
   import { qsoLog } from "$lib/qsoLog.svelte";
   import { entryBus } from "$lib/entry.svelte";
   import { settings } from "$lib/settings.svelte";
-  import { rfFromAudio, audioFromRf, dialForRf } from "$lib/freq";
+  import { rfFromAudio, audioFromRf, dialForRf, isLowerSideband } from "$lib/freq";
   import { bandFromHz } from "$lib/bands";
 
   // Canvas dimensions. Width matches the half-spectrum (fft_size/2).
@@ -80,11 +80,15 @@
     tracking = !settings.spMode;
   });
   const TRACK_INTERVAL_MS = 1500;
-  const TRACK_WINDOW_HZ = 40;
+  // AFC is anchored to our TX mark, not to wherever it last wandered: it
+  // only looks for a peak within ±TRACK_WINDOW_HZ of where we transmit, and
+  // snaps back there every time we unkey. Enough to pull in a caller who is
+  // a few Hz off; not enough to walk onto a neighbor before anyone calls.
+  const TRACK_WINDOW_HZ = 15;
   const TRACK_MIN_DELTA_HZ = 2;
   // Hold AFC still unless the candidate peak is a real signal — without this
   // gate, clicking a spot whose station has stopped transmitting lets AFC
-  // walk off onto noise or a neighbor, up to 40 Hz per tick.
+  // walk off onto noise or a neighbor.
   const TRACK_MIN_DB_ABOVE_MEAN = 7;
   let trackTimer: ReturnType<typeof setInterval> | null = null;
 
@@ -290,6 +294,12 @@
         if (rig.freq && Math.abs(r.freq - rig.freq) > 500) {
           spots.clear();
         }
+        // Unkey: whoever answers comes back on our frequency, so bring
+        // the decoder home to the TX mark rather than leaving it wherever
+        // AFC followed the last station.
+        if (rig.ptt && !r.ptt && tracking && !net && rttyConfig.markHz !== rttyConfig.txMarkHz) {
+          rttyConfig.setRxMark(rttyConfig.txMarkHz);
+        }
         rig = r;
       }),
     );
@@ -482,14 +492,14 @@
     return smoothedMags[k];
   }
 
-  // AFC tracker: every TRACK_INTERVAL_MS, recenter the mark tone on the
-  // strongest bin within ±TRACK_WINDOW_HZ of current. Effective for slow
-  // drift; ignored if there's no peak in the window.
+  // AFC tracker: every TRACK_INTERVAL_MS, move the decoder's mark onto the
+  // strongest bin within ±TRACK_WINDOW_HZ of our TX mark. Ignored if there's
+  // no real signal in that window.
   function trackingTick() {
     if (!smoothedMags || !sampleRate || !lastFftSize) return;
     if (rig.ptt) return; // our own signal is not a tracking target
     const binHz = sampleRate / lastFftSize;
-    const center = rttyConfig.markHz;
+    const center = rttyConfig.txMarkHz;
     const winBins = Math.max(1, Math.round(TRACK_WINDOW_HZ / binHz));
     const centerBin = Math.round(center / binHz);
     const lo = Math.max(1, centerBin - winBins);
@@ -522,8 +532,8 @@
     if (bestDb < mean + TRACK_MIN_DB_ABOVE_MEAN) return;
     const newMark = (bestBin + offset) * binHz;
     if (
-      Math.abs(newMark - center) > TRACK_MIN_DELTA_HZ &&
-      Math.abs(newMark - center) < TRACK_WINDOW_HZ
+      Math.abs(newMark - rttyConfig.markHz) > TRACK_MIN_DELTA_HZ &&
+      Math.abs(newMark - center) <= TRACK_WINDOW_HZ
     ) {
       if (net) {
         rttyConfig.setMark(Math.round(newMark));
@@ -579,6 +589,69 @@
       rttyConfig.setMark(Math.round(best.mark));
     }
   }
+
+  // Dial nudge — the waterfall as a VFO knob. Mouse wheel over the waterfall
+  // (or ←/→ while it has focus) retunes the radio, sliding every signal
+  // under the fixed mark/space markers. The marks don't move; the dial does.
+  // Shift = coarse steps. Rapid steps accumulate on a local target so a
+  // fast spin doesn't lose steps waiting for the rig to echo each VFO change.
+  const DIAL_STEP_HZ = 10;
+  const DIAL_COARSE_HZ = 100;
+  const WHEEL_PX_PER_STEP = 40; // trackpads send many small deltas
+  let canvasWrap: HTMLDivElement;
+  let dialTarget = 0;
+  let dialTargetAt = 0;
+  let wheelAccum = 0;
+  let dialSendTimer: ReturnType<typeof setTimeout> | null = null;
+
+  function nudgeDial(dialDeltaHz: number) {
+    if (!rig.freq) return;
+    const now = performance.now();
+    const base = now - dialTargetAt < 600 && dialTarget ? dialTarget : rig.freq;
+    dialTarget = base + dialDeltaHz;
+    dialTargetAt = now;
+    if (dialSendTimer) return;
+    dialSendTimer = setTimeout(async () => {
+      dialSendTimer = null;
+      try {
+        await setFreq(Math.round(dialTarget));
+      } catch (e) {
+        console.error("set_freq failed", e);
+      }
+    }, 40);
+  }
+
+  function onWaterfallWheel(e: WheelEvent) {
+    const d = Math.abs(e.deltaY) >= Math.abs(e.deltaX) ? e.deltaY : e.deltaX;
+    if (d === 0) return;
+    e.preventDefault(); // the page shouldn't scroll while you're tuning
+    // Line/page-mode wheels (most mice on Windows/Linux) → one step per notch.
+    wheelAccum += e.deltaMode === 0 ? d : Math.sign(d) * WHEEL_PX_PER_STEP;
+    const steps = Math.trunc(wheelAccum / WHEEL_PX_PER_STEP);
+    if (steps === 0) return;
+    wheelAccum -= steps * WHEEL_PX_PER_STEP;
+    // Wheel up = dial up, like the radio's knob.
+    nudgeDial(-steps * (e.shiftKey ? DIAL_COARSE_HZ : DIAL_STEP_HZ));
+  }
+
+  function onWaterfallKey(e: KeyboardEvent) {
+    if (e.key !== "ArrowLeft" && e.key !== "ArrowRight") return;
+    if (e.ctrlKey || e.altKey || e.metaKey) return;
+    e.preventDefault();
+    // ←/→ slide the signals left/right on screen. In DIGL a signal's audio
+    // tone rises with the dial, so "right" is dial up; in USB it's down.
+    const right = e.key === "ArrowRight" ? 1 : -1;
+    const step = e.shiftKey ? DIAL_COARSE_HZ : DIAL_STEP_HZ;
+    nudgeDial(right * step * (isLowerSideband(rig.mode) ? 1 : -1));
+  }
+
+  // Svelte attaches wheel handlers as passive, which would forbid
+  // preventDefault — wire it by hand.
+  $effect(() => {
+    if (!canvasWrap) return;
+    canvasWrap.addEventListener("wheel", onWaterfallWheel, { passive: false });
+    return () => canvasWrap.removeEventListener("wheel", onWaterfallWheel);
+  });
 
   // Click on the waterfall → set mark tone at that audio frequency.
   // If snap-to-peak is on, find the loudest bin within ±SNAP_HZ.
@@ -647,7 +720,7 @@
       >
         Auto-tune
       </button>
-      <label class="track-label" title="Continuously re-center the RX mark on the strongest nearby peak. TX stays put unless NET is on. Turns on in Run and off in S&P automatically; tick to override.">
+      <label class="track-label" title="Pull the RX mark onto the strongest peak within ±{TRACK_WINDOW_HZ} Hz of your TX mark, and snap back to it each time you unkey. TX stays put unless NET is on. Turns on in Run and off in S&P automatically; tick to override.">
         <input type="checkbox" bind:checked={tracking} />
         AFC
       </label>
@@ -715,11 +788,18 @@
 
   <div class="freq-axis">
     <span>{fmtMhz(rig.freq)}</span>
-    <span class="dim">click → set mark · {(rig.mode || "digl").toUpperCase()} · span {spanLabel(viewSpanHz)}</span>
+    <span class="dim">click → set mark · wheel/←→ → tune · {(rig.mode || "digl").toUpperCase()} · span {spanLabel(viewSpanHz)}</span>
     <span>{fmtMhz(topFreqHz)}</span>
   </div>
 
-  <div class="canvas-wrap">
+  <!-- svelte-ignore a11y_no_noninteractive_tabindex, a11y_no_static_element_interactions -->
+  <div
+    class="canvas-wrap"
+    bind:this={canvasWrap}
+    tabindex="0"
+    onkeydown={onWaterfallKey}
+    title="Wheel or ←/→ tunes the radio ({DIAL_STEP_HZ} Hz; Shift = {DIAL_COARSE_HZ} Hz)"
+  >
     <canvas
       bind:this={canvas}
       width={WIDTH}
@@ -939,6 +1019,8 @@
     width: 100%;
     height: 260px;
   }
+  .canvas-wrap:focus { outline: none; }
+  .canvas-wrap:focus-visible { outline: 1px solid #3a5a8a; outline-offset: -1px; }
 
   canvas {
     display: block;

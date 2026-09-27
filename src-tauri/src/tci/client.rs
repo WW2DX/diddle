@@ -37,6 +37,8 @@ const TX_AMPLITUDE: f32 = 0.6;
 // Sideband our AFSK RTTY tones assume. We force the radio into DIGL on
 // connect and before every transmit so the operator never has to set it.
 const RTTY_MODE: &str = "digl";
+/// Minimum gap between automatic DIGL restores (see `mode_fix_due`).
+const MODE_FIX_MIN_INTERVAL: Duration = Duration::from_secs(2);
 // After PTT drops, keep the RX decoders muted this long so the level jump
 // at the TX→RX transition can't pump the AGC/noise floor into junk chars.
 const RX_MUTE_HOLDOFF_MS: u64 = 300;
@@ -188,6 +190,9 @@ pub struct TciClient {
     rx_mute: AtomicBool,
     /// Keeps the mute in force briefly after unkey (see RX_MUTE_HOLDOFF_MS).
     rx_resume_at: std::sync::Mutex<Option<Instant>>,
+    /// When we last pushed DIGL back after the rig reported another mode.
+    /// Rate-limits the guard so a radio that refuses DIGL can't ping-pong.
+    last_mode_fix: std::sync::Mutex<Option<Instant>>,
 }
 
 impl TciClient {
@@ -204,6 +209,7 @@ impl TciClient {
             tx_cancel: AtomicBool::new(false),
             rx_mute: AtomicBool::new(false),
             rx_resume_at: std::sync::Mutex::new(None),
+            last_mode_fix: std::sync::Mutex::new(None),
         }
     }
 
@@ -457,6 +463,17 @@ impl TciClient {
     /// change back as a `modulation:0,digl` message, which updates rig state.
     async fn force_rtty_mode(&self) {
         let _ = self.send(format!("modulation:0,{};", RTTY_MODE)).await;
+    }
+
+    /// True at most once per MODE_FIX_MIN_INTERVAL, recording the attempt.
+    fn mode_fix_due(&self) -> bool {
+        let mut last = self.last_mode_fix.lock().unwrap();
+        let now = Instant::now();
+        if last.is_some_and(|t| now.duration_since(t) < MODE_FIX_MIN_INTERVAL) {
+            return false;
+        }
+        *last = Some(now);
+        true
     }
 
     async fn emit_rig(&self) {
@@ -739,6 +756,14 @@ impl TciClient {
                 if let Some(mode) = m.arg_str(1) {
                     self.rig.write().await.mode = mode.to_string();
                     self.emit_rig().await;
+                    // Something else changed the mode — the RHR Console does
+                    // on spectrum clicks and band changes. USB/DIGU swaps mark
+                    // and space, so the decoder prints garbage until we next
+                    // key up. Put DIGL back now instead.
+                    if !mode.eq_ignore_ascii_case(RTTY_MODE) && self.mode_fix_due() {
+                        info!(%mode, "rig left DIGL — restoring");
+                        self.force_rtty_mode().await;
+                    }
                 }
             }
             "trx" if m.arg_u8(0) == Some(0) => {

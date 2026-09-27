@@ -339,7 +339,10 @@
       }
     }
 
-    if (e.key === "Enter") {
+    if (e.key === "Enter" && e.ctrlKey) {
+      // Log It — handled by onGlobalKey so it works from any focus.
+      return;
+    } else if (e.key === "Enter") {
       e.preventDefault();
       if (isFreqEntry) {
         qsyToTyped();
@@ -385,6 +388,8 @@
   }
 
   // Global entry shortcuts — active regardless of focus:
+  //   Ctrl+Enter  Log It: log Call + Exch as they stand, send nothing
+  //               (N1MM-style; the way out of a botched ESM sequence)
   //   Ctrl/Alt+W  wipe the entry fields
   //   Alt+U       toggle Run / S&P
   //   Ctrl+D      delete the most recent QSO (press twice to confirm)
@@ -411,7 +416,18 @@
 
   function onGlobalKey(e: KeyboardEvent) {
     if (e.metaKey) return;
-    if (e.code === "KeyW" && (e.ctrlKey || e.altKey)) {
+    if (e.key === "Enter" && e.ctrlKey && !e.altKey) {
+      // Don't steal Ctrl+Enter from another panel's text field (log edit,
+      // Ctrl+Q/Ctrl+N popups, settings); the entry fields are fine.
+      const t = e.target as HTMLElement | null;
+      const foreignField =
+        t instanceof HTMLInputElement || t instanceof HTMLTextAreaElement
+          ? !(t === callInput || t === rstInput || t === exchInput)
+          : false;
+      if (foreignField) return;
+      e.preventDefault();
+      if (canLog) logQso();
+    } else if (e.code === "KeyW" && (e.ctrlKey || e.altKey)) {
       e.preventDefault();
       clearForm();
     } else if (e.code === "KeyU" && e.altKey && !e.ctrlKey) {
@@ -527,8 +543,13 @@
       <div class="contest-label">{contest.name}</div>
     </div>
 
-    <button class="log-btn" disabled={!canLog} onclick={logQso}>
-      Log <span class="kbd">↵</span>
+    <button
+      class="log-btn"
+      disabled={!canLog}
+      onclick={logQso}
+      title="Log what's in Call and Exch now, without sending anything (Ctrl+Enter). Works the same with ESM on or off."
+    >
+      Log it <span class="kbd">Ctrl+↵</span>
     </button>
   </div>
 </section>

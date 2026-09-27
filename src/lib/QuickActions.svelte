@@ -1,19 +1,24 @@
 <script lang="ts">
   // Log quick actions on global shortcuts:
   //   Ctrl+N — attach/edit a note on a logged QSO (newest by default)
-  //   Ctrl+Q — quick-edit a logged callsign (newest by default)
+  //   Ctrl+Q — quick-edit a logged callsign (newest by default); Tab
+  //            switches between the call and the received exchange
   // ↑/↓ steps back/forward through the log while either popup is open
   // (Ctrl+Q again also steps older, N1MM-style). Enter saves, Esc cancels.
   // Cmd combos are never claimed (Cmd+N/Q belong to the OS).
   import { tick } from "svelte";
   import { qsoLog } from "$lib/qsoLog.svelte";
 
-  type Mode = "note" | "edit";
+  type Mode = "note" | "edit" | "exch";
   let mode = $state<Mode | null>(null);
   let text = $state("");
   // Offset from the newest QSO: 0 = most recent, 1 = one before, …
   let idx = $state(0);
   let inputEl = $state<HTMLInputElement | undefined>(undefined);
+
+  let title = $derived(
+    mode === "note" ? "Note" : mode === "exch" ? "Edit exchange" : "Edit call",
+  );
 
   let target = $derived(
     mode !== null && qsoLog.qsos.length > 0
@@ -31,7 +36,7 @@
   function loadText() {
     const q = qsoLog.qsos[qsoLog.qsos.length - 1 - idx];
     if (!q) return;
-    text = mode === "note" ? (q.note ?? "") : q.call;
+    text = mode === "note" ? (q.note ?? "") : mode === "exch" ? q.exchRcvd : q.call;
   }
 
   // Cursor at the end, nothing selected — so a wrong character can be
@@ -56,6 +61,8 @@
     if (!target) return;
     if (mode === "note") {
       qsoLog.update(target.id, { note: text.trim() || undefined });
+    } else if (mode === "exch") {
+      qsoLog.update(target.id, { exchRcvd: text.trim().replace(/\s+/g, " ") });
     } else {
       const call = text.toUpperCase().replace(/[^A-Z0-9/]/g, "").slice(0, 12);
       if (call.length < 3) return; // don't save a mangled call
@@ -72,13 +79,26 @@
       else open("note");
     } else if (e.code === "KeyQ") {
       e.preventDefault();
-      if (mode === "edit") step(1);
+      if (mode === "edit" || mode === "exch") step(1);
       else open("edit");
     }
   }
 
+  // Tab flips the Ctrl+Q popup between call and exchange on the same QSO.
+  // Unsaved typing in the field you leave is dropped, like Esc.
+  async function switchField() {
+    if (mode !== "edit" && mode !== "exch") return;
+    mode = mode === "edit" ? "exch" : "edit";
+    loadText();
+    await tick();
+    focusCursorEnd();
+  }
+
   function onInputKey(e: KeyboardEvent) {
-    if (e.key === "Enter") {
+    if (e.key === "Tab") {
+      e.preventDefault();
+      switchField();
+    } else if (e.key === "Enter") {
       e.preventDefault();
       commit();
     } else if (e.key === "Escape") {
@@ -95,7 +115,7 @@
 
   function onInput(e: Event) {
     const v = (e.target as HTMLInputElement).value;
-    text = mode === "edit" ? v.toUpperCase() : v;
+    text = mode === "note" ? v : v.toUpperCase();
   }
 
   function fmtTime(ts: number): string {
@@ -114,17 +134,19 @@
 
 {#if mode !== null && target}
   <div class="overlay">
-    <div class="box" role="dialog" aria-label={mode === "note" ? "Add note" : "Quick edit call"}>
+    <div class="box" role="dialog" aria-label={title}>
       <header>
-        <h2>{mode === "note" ? "Note" : "Edit call"}</h2>
+        <h2>{title}</h2>
         <span class="qso">
           #{target.serialSent} · {target.call} · {target.band} · {fmtTime(target.ts)}
+          {#if mode === "edit"}· rcvd {target.exchRcvd || "—"}{/if}
           {#if idx > 0}<span class="back">({idx} back)</span>{/if}
         </span>
         <span class="hint">
           <span class="kbd">↵</span> save ·
           <span class="kbd">esc</span> cancel ·
           <span class="kbd">↑↓</span> other QSO
+          {#if mode !== "note"}· <span class="kbd">tab</span> {mode === "edit" ? "exch" : "call"}{/if}
         </span>
       </header>
       <input
@@ -132,8 +154,8 @@
         value={text}
         oninput={onInput}
         onkeydown={onInputKey}
-        placeholder={mode === "note" ? "Note for this QSO…" : "CALLSIGN"}
-        class:call={mode === "edit"}
+        placeholder={mode === "note" ? "Note for this QSO…" : mode === "exch" ? "RECEIVED EXCHANGE" : "CALLSIGN"}
+        class:call={mode !== "note"}
         spellcheck="false"
         autocomplete="off"
       />

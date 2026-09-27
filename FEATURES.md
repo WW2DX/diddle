@@ -13,7 +13,7 @@ A complete rundown of what Diddle does today, plus what's planned.
 
 - **Pure-software AFSK demodulator** written in Rust — two quadrature correlators (mark/space NCOs), matched-filter integration over one bit period, magnitude slicer, and an async-serial start/stop-bit state machine.
 - **ITA2 / Baudot decode** with LTRS/FIGS shift handling (fldigi-canonical table).
-- **Standard RTTY defaults** — 45.45 baud, 170 Hz shift, tones mark 2125 Hz / space 2295 Hz. Diddle forces the radio into **DIGL (LSB)** on connect, which is the usual sideband for amateur RTTY; keep **REV off**. Tones, shift, baud, and reverse are all tunable.
+- **Standard RTTY defaults** — 45.45 baud, 170 Hz shift, tones mark 2125 Hz / space 2295 Hz. Diddle forces the radio into **DIGL (LSB)** on connect, and puts it back whenever something else (the RHR Console, a band change) switches the rig to another mode, which is the usual sideband for amateur RTTY; keep **REV off**. Tones, shift, baud, and reverse are all tunable.
 - **AGC + biquad pre-filtering** for clean copy on weak/crowded signals.
 - **Decoder view** streams demodulated text as it arrives.
 
@@ -22,6 +22,8 @@ A complete rundown of what Diddle does today, plus what's planned.
 - **Up to 12 simultaneous decoders** scanning the smoothed spectrum for likely RTTY pairs, each running its own independent demodulator.
 - **Automatic callsign extraction** — decoded text from each slot is scanned for plausible callsigns.
 - **Clickable waterfall tags** — surfaced callsigns appear as floating tags on the waterfall; click to QSY straight onto the signal.
+- **Waterfall as a VFO knob** — mouse wheel over the waterfall (or `←`/`→` when it has focus) tunes the radio 10 Hz per step, 100 Hz with `Shift`, sliding signals under the mark/space markers.
+- **Anchored AFC** — pulls the decoder onto a caller within ±15 Hz of your TX mark and snaps back to it each time you unkey, so it can't wander onto a neighbor while you're running. On in Run, off in S&P.
 - **SCP-validated spots** — candidate calls can be checked against the Super Check Partial database to cut noise.
 
 ## RTTY transmit
@@ -47,6 +49,8 @@ A complete rundown of what Diddle does today, plus what's planned.
 - **Per-QSO fields** — call, timestamp (UTC), frequency, band, mode, RST sent/received, exchange sent/received, serial.
 - **Band derivation** from frequency across 160 m – 2 m.
 - Editable / deletable entries with auto-save.
+- **Log It** — `Ctrl+Enter` (or the Log it button) logs Call + Exch as they stand without sending anything, the way out of a botched ESM sequence.
+- **Quick edit** — `Ctrl+Q` edits the last QSO's call; `Tab` switches to its received exchange. `↑`/`↓` (or `Ctrl+Q` again) steps to older QSOs.
 
 ## Testing without a radio
 
