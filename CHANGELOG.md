@@ -5,6 +5,17 @@ All notable changes to Diddle are documented here. Format loosely follows
 
 ## [Unreleased]
 
+### Added
+- **Click exchange words in the RX window.** Clicking a received word that isn't a callsign (zone, state, serial, name) adds it to Exch: the first click replaces an empty or call-history-filled Exch, later clicks append (`05`, then `NY` → `05 NY`), and a word already there isn't doubled. `599`, `TU`, `CQ` and the like are ignored, as is your own TX echo.
+- **Docked bandmap.** On a window about 1100 px wide or more, the bandmap moves to a full-height column beside the waterfall that stays on screen while you scroll, so reading down a busy band no longer means scrolling away from the waterfall. The *dock* button in its header puts it back below the F-keys.
+- **You-are-here marker in the bandmap** at your operating frequency, in frequency order with the spots. The list keeps it centred as you tune (unless you've scrolled the list in the last few seconds).
+
+### Changed
+- **Much better copy of a weak station with a strong one in the passband.** The decoders' front end was a single gentle bandpass, so a big signal a few hundred Hz away leaked in and lifted the squelch floor over the weak one. Each decoder (the main one and all 12 scanning slots) now mixes its mark/space pair down to baseband and applies an 8th-order Butterworth filter. On a test signal 30 dB under a neighbour 400 Hz away, copy went from about a third of the characters to all of them; 40 dB under a neighbour 600 Hz away, from 14 % to all. Weak-signal copy in plain noise is unchanged. A neighbour closer than ~300 Hz still overlaps the tones and can't be filtered out.
+
+### Fixed
+- Ctrl/Cmd + mouse wheel over the waterfall zoomed the UI *and* retuned the radio. It now only zooms.
+
 ## [0.1.21] — 2026-09-27
 
 ### Added

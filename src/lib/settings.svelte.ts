@@ -19,6 +19,7 @@ interface Stored {
   decodeHistoryLines?: number;
   clusterLoginCommands?: string; // one per line, sent after login
   bandmapAllBands?: boolean; // false = current band only
+  bandmapSide?: boolean; // true = docked column beside the operating panels
   historyPath?: string; // N1MM-style call history file
 }
 
@@ -43,6 +44,7 @@ class Settings {
   decodeHistoryLines = $state<number>(HISTORY_DEFAULT);
   clusterLoginCommands = $state<string>("");
   bandmapAllBands = $state<boolean>(false);
+  bandmapSide = $state<boolean>(true);
   historyPath = $state<string>("");
   loaded = $state(false);
 
@@ -67,6 +69,7 @@ class Settings {
         }
         this.clusterLoginCommands = obj.clusterLoginCommands || "";
         if (obj.bandmapAllBands !== undefined) this.bandmapAllBands = obj.bandmapAllBands;
+        if (obj.bandmapSide !== undefined) this.bandmapSide = obj.bandmapSide;
         this.historyPath = obj.historyPath || "";
       }
     } catch (e) {
@@ -94,6 +97,7 @@ class Settings {
           decodeHistoryLines: this.decodeHistoryLines,
           clusterLoginCommands: this.clusterLoginCommands,
           bandmapAllBands: this.bandmapAllBands,
+          bandmapSide: this.bandmapSide,
           historyPath: this.historyPath,
         } satisfies Stored),
       );
@@ -186,6 +190,10 @@ class Settings {
   }
   toggleBandmapAllBands() {
     this.setBandmapAllBands(!this.bandmapAllBands);
+  }
+  toggleBandmapSide() {
+    this.bandmapSide = !this.bandmapSide;
+    this.save();
   }
   setHistoryPath(v: string) {
     this.historyPath = v;

@@ -622,6 +622,7 @@
   }
 
   function onWaterfallWheel(e: WheelEvent) {
+    if (e.ctrlKey || e.metaKey) return; // Ctrl/Cmd+wheel is UI zoom, not tuning
     const d = Math.abs(e.deltaY) >= Math.abs(e.deltaX) ? e.deltaY : e.deltaX;
     if (d === 0) return;
     e.preventDefault(); // the page shouldn't scroll while you're tuning

@@ -15,7 +15,8 @@ A complete rundown of what Diddle does today, plus what's planned.
 - **ITA2 / Baudot decode** with LTRS/FIGS shift handling (fldigi-canonical table).
 - **Standard RTTY defaults** — 45.45 baud, 170 Hz shift, tones mark 2125 Hz / space 2295 Hz. Diddle forces the radio into **DIGL (LSB)** on connect, and puts it back whenever something else (the RHR Console, a band change) switches the rig to another mode, which is the usual sideband for amateur RTTY; keep **REV off**. Tones, shift, baud, and reverse are all tunable.
 - **AGC + biquad pre-filtering** for clean copy on weak/crowded signals.
-- **Decoder view** streams demodulated text as it arrives.
+- **Decoder view** streams demodulated text as it arrives. Click a callsign to load it; click an exchange word (zone, state, serial, name) to add it to Exch — the first click replaces an empty or history-filled Exch, later clicks append.
+- **Steep channel filter** — each decoder mixes its mark/space pair to baseband and applies an 8th-order Butterworth filter, so a station 30–40 dB stronger a few hundred Hz away no longer wipes out copy of a weak one.
 
 ## Multi-decoder + band spotting
 
@@ -90,6 +91,7 @@ Each profile knows its Cabrillo `CONTEST:` name and builds the sent exchange fro
 - **Click-to-QSY** from cluster spots (DIGL-aware — the dial is set so the spot lands on your mark tone).
 - **Cluster command line** under the bandmap for `set/filter`, `sh/dx`, etc., plus persisted **login commands** re-sent every time Diddle connects.
 - **Bandmap current-band / all-bands toggle**, with per-band worked status.
+- **Docked bandmap** — on windows about 1100 px wide or more, the bandmap sits in a full-height column beside the waterfall and stays on screen while the page scrolls (toggle *dock* in its header). A **you-are-here** marker sits at your operating frequency among the spots and the list keeps it centred as you tune, unless you've just scrolled it yourself.
 
 ## Display & tools
 

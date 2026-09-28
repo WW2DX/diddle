@@ -231,6 +231,31 @@
     queueMicrotask(() => exchInput?.focus());
   });
 
+  // An exchange word clicked in the decoder window. Builds the exchange a
+  // piece at a time, N1MM-style: the first click replaces an empty or
+  // history-filled Exch (his zone may differ from last year's), later clicks
+  // append (zone, then state), and a word already there isn't doubled.
+  let lastExchToken = 0;
+  $effect(() => {
+    const t = entryBus.exchToken;
+    if (t === lastExchToken) return;
+    lastExchToken = t;
+    const w = entryBus.requestedExchWord.trim().toUpperCase();
+    if (!w) return;
+    const cur = exchRcvd.trim();
+    if (!cur || exchFromHistory) {
+      exchRcvd = w;
+    } else if (!cur.split(/\s+/).includes(w)) {
+      exchRcvd = `${cur} ${w}`;
+    }
+    exchFromHistory = false;
+    queueMicrotask(() => {
+      exchInput?.focus();
+      const n = exchInput?.value.length ?? 0;
+      exchInput?.setSelectionRange(n, n);
+    });
+  });
+
   function normalizeCall(s: string): string {
     return s
       .toUpperCase()

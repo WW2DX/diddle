@@ -9,7 +9,9 @@
   import { settings } from "$lib/settings.svelte";
   import { entryBus } from "$lib/entry.svelte";
 
-  let { rig }: { rig: RigState } = $props();
+  // `docked`: rendered in the page's sticky side column — the panel then
+  // fills the column's height and the row list takes all the spare room.
+  let { rig, docked = false }: { rig: RigState; docked?: boolean } = $props();
 
   type Source = "cluster" | "decoder" | "log";
 
@@ -116,6 +118,49 @@
     return [...map.values()].sort((a, b) => a.freqHz - b.freqHz);
   });
 
+  // ---- "You are here" ----
+  // A marker row at the radio's operating frequency (the TX mark tone on the
+  // air), in frequency order with the spots, WriteLog-style. The list keeps
+  // it centred as you tune, so the stations either side of you are always
+  // in view — unless you've scrolled the list yourself in the last few
+  // seconds, in which case it leaves you alone.
+  let hereHz = $derived(rfFromAudio(rig.freq || 0, rttyConfig.txMarkHz, rig.mode));
+  let hereIdx = $derived.by(() => {
+    if (!rig.freq) return -1;
+    const i = rows.findIndex((r) => r.freqHz > hereHz);
+    return i < 0 ? rows.length : i;
+  });
+  let rowsEl = $state<HTMLDivElement | undefined>();
+  let hereEl = $state<HTMLDivElement | undefined>();
+  const MANUAL_SCROLL_HOLD_MS = 5000;
+  let manualScrollAt = 0;
+  let programmaticScroll = false;
+
+  function centreHere() {
+    if (!rowsEl || !hereEl) return;
+    if (Date.now() - manualScrollAt < MANUAL_SCROLL_HOLD_MS) return;
+    const top = hereEl.offsetTop - rowsEl.clientHeight / 2 + hereEl.offsetHeight / 2;
+    programmaticScroll = true;
+    rowsEl.scrollTop = Math.max(0, top);
+  }
+
+  function onRowsScroll() {
+    if (programmaticScroll) {
+      programmaticScroll = false;
+      return;
+    }
+    manualScrollAt = Date.now();
+  }
+
+  // Re-centre when the radio moves (100 Hz granularity — AFC and tiny
+  // nudges shouldn't jiggle the list) or when the marker first appears.
+  let hereKey = $derived(Math.round(hereHz / 100));
+  $effect(() => {
+    hereKey;
+    hereEl;
+    queueMicrotask(centreHere);
+  });
+
   // ---- Cluster command line (set/filter …, sh/dx, etc.) ----
   let cmd = $state("");
   let cmdInput: HTMLInputElement | undefined;
@@ -190,7 +235,7 @@
   }
 </script>
 
-<section class="panel">
+<section class="panel" class:docked>
   <header>
     <h2>
       Bandmap <span class="dim">· {allBands ? "all bands" : currentBand}</span>
@@ -210,6 +255,14 @@
       <span class="dim">({rows.length})</span>
       <button
         class="band-toggle"
+        class:on={settings.bandmapSide}
+        onclick={() => settings.toggleBandmapSide()}
+        title="Dock the bandmap in a column beside the waterfall (stays on screen while you scroll), or put it back below the F-keys. Needs a window about 1100 px wide."
+      >
+        {settings.bandmapSide ? "docked" : "dock"}
+      </button>
+      <button
+        class="band-toggle"
         onclick={clearAll}
         disabled={rows.length === 0}
         title="Remove every row from the bandmap (spots and worked markers). The log is not affected; new spots keep arriving."
@@ -225,8 +278,13 @@
       let the multi-decoder find some signals on this band.
     </div>
   {:else}
-    <div class="rows">
-      {#each rows as r (r.call + "@" + r.freqHz)}
+    <div class="rows" bind:this={rowsEl} onscroll={onRowsScroll}>
+      {#each rows as r, i (r.call + "@" + r.freqHz)}
+        {#if i === hereIdx}
+          <div class="here" bind:this={hereEl} title="Your operating frequency">
+            <span>▶</span><span class="freq">{fmtMhz(hereHz)}</span><span class="here-label">you</span>
+          </div>
+        {/if}
         <button
           class="row src-{r.source}"
           class:worked={r.worked}
@@ -241,6 +299,11 @@
           <span class="age">{ago(r.timestamp)}</span>
         </button>
       {/each}
+      {#if hereIdx === rows.length}
+        <div class="here" bind:this={hereEl} title="Your operating frequency">
+          <span>▶</span><span class="freq">{fmtMhz(hereHz)}</span><span class="here-label">you</span>
+        </div>
+      {/if}
     </div>
   {/if}
 
@@ -325,7 +388,38 @@
     padding: 16px 0;
   }
 
+  /* Docked: fill the sticky side column; the row list takes the spare room. */
+  .panel.docked {
+    height: 100%;
+    box-sizing: border-box;
+    display: flex;
+    flex-direction: column;
+    margin-bottom: 0;
+  }
+  .panel.docked header { flex-wrap: wrap; gap: 6px; }
+  .panel.docked .legend { flex-wrap: wrap; gap: 6px 10px; }
+  .panel.docked .rows { flex: 1; min-height: 0; max-height: none; }
+  .panel.docked .empty { flex: 1; }
+  .panel.docked .row { grid-template-columns: 14px 96px 90px 1fr 34px; gap: 8px; }
+
+  .here {
+    display: grid;
+    grid-template-columns: 14px auto 1fr;
+    align-items: center;
+    gap: 10px;
+    padding: 2px 10px;
+    font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+    font-size: 11px;
+    color: #fbbf24;
+    background: rgba(251, 191, 36, 0.08);
+    border-top: 1px solid rgba(251, 191, 36, 0.45);
+    border-bottom: 1px solid rgba(251, 191, 36, 0.45);
+  }
+  .here .freq { color: #fbbf24; }
+  .here-label { text-transform: uppercase; letter-spacing: 1px; font-size: 10px; opacity: 0.8; }
+
   .rows {
+    position: relative; /* offsetTop of the marker is measured from here */
     display: flex;
     flex-direction: column;
     gap: 1px;

@@ -83,6 +83,54 @@
     entryBus.setCall(c);
   }
 
+  // Click a received word that isn't a callsign (zone, state, serial, name)
+  // to add it to the Exch field. Resolved from the click point rather than
+  // by wrapping every word in its own element, which would bloat a long
+  // scrollback. Our own TX echo and operating words (599, TU, CQ…) are
+  // ignored, as is the mouse-up that ends a text selection.
+  function onTextClick(e: MouseEvent) {
+    const el = e.target as HTMLElement;
+    if (el.closest("button") || el.classList.contains("tx")) return;
+    const sel = window.getSelection();
+    if (sel && !sel.isCollapsed) return;
+    const w = wordAt(e.clientX, e.clientY);
+    if (!w) return;
+    const u = w.toUpperCase();
+    if (u.length > 12 || MARKERS.has(u) || isCallToken(u)) return;
+    entryBus.addExchWord(u);
+  }
+
+  function wordAt(x: number, y: number): string | null {
+    const doc = document as Document & {
+      caretPositionFromPoint?: (x: number, y: number) => { offsetNode: Node; offset: number } | null;
+    };
+    let node: Node | null = null;
+    let off = 0;
+    if (doc.caretPositionFromPoint) {
+      const p = doc.caretPositionFromPoint(x, y);
+      if (p) ({ offsetNode: node, offset: off } = p);
+    } else if (document.caretRangeFromPoint) {
+      const r = document.caretRangeFromPoint(x, y);
+      if (r) { node = r.startContainer; off = r.startOffset; }
+    }
+    if (!node || node.nodeType !== Node.TEXT_NODE) return null;
+    const text = node.textContent ?? "";
+    const isW = (c: string) => /[A-Za-z0-9/]/.test(c);
+    let a = off, b = off;
+    while (a > 0 && isW(text[a - 1])) a--;
+    while (b < text.length && isW(text[b])) b++;
+    if (a === b) return null;
+    // A click past the end of a line lands the caret on the line's last
+    // word — only accept it if the pointer is really on the word.
+    const range = document.createRange();
+    range.setStart(node, a);
+    range.setEnd(node, b);
+    const hit = Array.from(range.getClientRects()).some(
+      (r) => x >= r.left - 1 && x <= r.right + 1 && y >= r.top - 1 && y <= r.bottom + 1,
+    );
+    return hit ? text.slice(a, b) : null;
+  }
+
   // Render segments: the runs flattened and split around callsign-shaped
   // tokens so every displayed call — RX (filtered or raw) and TX echo alike —
   // becomes a clickable chip. Non-call text stays in large chunks so the DOM
@@ -433,7 +481,8 @@
   <div class="rx-body">
     <TuningScope />
     <div class="rx-wrap">
-      <div class="rx-text" bind:this={scrollEl} onscroll={onScroll}
+      <!-- svelte-ignore a11y_click_events_have_key_events, a11y_no_static_element_interactions -->
+      <div class="rx-text" bind:this={scrollEl} onscroll={onScroll} onclick={onTextClick}
         >{#each segments as seg}{#if seg.call}<button class="call-chip" class:tx={seg.tx} class:dupe={workedHere.has(seg.call!)} title={workedHere.has(seg.call!) ? `${seg.call} — already worked on ${band}` : `Load ${seg.call} into the entry form`} onclick={() => pickCall(seg.call!)}>{seg.s}</button>{:else}<span class:tx={seg.tx}>{seg.s}</span>{/if}{/each}{#if pendingLine}<span class="pending">{pendingLine}</span>{/if}{#if segments.length === 0 && !pendingLine}{" "}{/if}</div
       >
       {#if !autoScroll}
