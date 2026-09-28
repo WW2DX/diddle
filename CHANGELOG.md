@@ -5,6 +5,8 @@ All notable changes to Diddle are documented here. Format loosely follows
 
 ## [Unreleased]
 
+## [0.1.22] — 2026-09-28
+
 ### Added
 - **Click exchange words in the RX window.** Clicking a received word that isn't a callsign (zone, state, serial, name) adds it to Exch: the first click replaces an empty or call-history-filled Exch, later clicks append (`05`, then `NY` → `05 NY`), and a word already there isn't doubled. `599`, `TU`, `CQ` and the like are ignored, as is your own TX echo.
 - **Docked bandmap.** On a window about 1100 px wide or more, the bandmap moves to a full-height column beside the waterfall that stays on screen while you scroll, so reading down a busy band no longer means scrolling away from the waterfall. The *dock* button in its header puts it back below the F-keys.
