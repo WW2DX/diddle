@@ -30,7 +30,7 @@ use tokio::sync::RwLock;
 use tokio::task::JoinHandle;
 use tracing::info;
 
-use crate::dsp::{RttyTunable, RttyTxGenerator, RxPipeline};
+use crate::dsp::{LiveTx, RttyTunable, RttyTxGenerator, RxPipeline, LIVE_IDLE_TIMEOUT};
 use crate::scp::ScpDb;
 use crate::tci::RigState;
 
@@ -1238,6 +1238,8 @@ pub struct Simulator {
     task: RwLock<Option<JoinHandle<()>>>,
     tx_busy: AtomicBool,
     tx_cancel: AtomicBool,
+    /// Live keyboard send in progress (see `live_start`).
+    live: Mutex<Option<LiveTx>>,
 }
 
 impl Simulator {
@@ -1250,6 +1252,7 @@ impl Simulator {
             task: RwLock::new(None),
             tx_busy: AtomicBool::new(false),
             tx_cancel: AtomicBool::new(false),
+            live: Mutex::new(None),
         }
     }
 
@@ -1415,6 +1418,10 @@ impl Simulator {
         if text.trim().is_empty() {
             anyhow::bail!("refusing to transmit empty text");
         }
+        // A macro during a live keyboard send joins it.
+        if self.live_push(&text) {
+            return Ok(());
+        }
         // Playback is listen-only: the scripted run plays both sides, so
         // an F-key has nothing to say to it. Don't key up, don't echo, and
         // don't mute the RX — just note it in the log.
@@ -1489,6 +1496,111 @@ impl Simulator {
             info!("sim: tx cancelled");
         }
         Ok(())
+    }
+
+    /// Live keyboard send against the simulated band: paced in real time
+    /// like a real transmission, echoing as it goes; the stations react to
+    /// the whole text once it ends. Resolves when the transmission is over.
+    pub async fn live_start(&self, initial: String) -> anyhow::Result<()> {
+        if !self.is_running() {
+            anyhow::bail!("simulator not running");
+        }
+        let playback = {
+            let guard = self.world.lock().unwrap();
+            guard.as_ref().map(|w| w.cfg.mode == SimMode::Playback).unwrap_or(false)
+        };
+        if playback {
+            anyhow::bail!("simulator playback is listen-only");
+        }
+        if self.tx_busy.swap(true, Ordering::SeqCst) {
+            anyhow::bail!("TX already in progress");
+        }
+        self.tx_cancel.store(false, Ordering::SeqCst);
+        let rcfg = self.rtty.get().await;
+        let (mark, space) = rcfg.tx_tones();
+        let mut live = LiveTx::new(SAMPLE_RATE, mark, space, rcfg.baud);
+        live.push(&initial);
+        *self.live.lock().unwrap() = Some(live);
+        {
+            let mut guard = self.world.lock().unwrap();
+            if let Some(w) = guard.as_mut() {
+                w.ptt = true;
+                w.dirty = true;
+            }
+        }
+        self.emit_rig(true);
+
+        let mut last = Instant::now();
+        let mut scratch = Vec::new();
+        let mut cancelled = false;
+        loop {
+            if self.tx_cancel.load(Ordering::SeqCst) {
+                cancelled = true;
+                break;
+            }
+            let (echoes, done) = {
+                let mut guard = self.live.lock().unwrap();
+                let Some(live) = guard.as_mut() else { break };
+                let n = (last.elapsed().as_secs_f64() * SAMPLE_RATE as f64) as usize;
+                if n > 0 {
+                    last = Instant::now();
+                    scratch.clear();
+                    live.generate(n, &mut scratch);
+                }
+                if !live.is_finishing() && live.idle_for() > LIVE_IDLE_TIMEOUT {
+                    live.finish();
+                }
+                (live.take_echoes(), live.is_done())
+            };
+            for c in echoes {
+                let _ = self.app.emit("tx:echo", c.to_string());
+            }
+            if done {
+                break;
+            }
+            tokio::time::sleep(Duration::from_millis(20)).await;
+        }
+        let sent = self
+            .live
+            .lock()
+            .unwrap()
+            .take()
+            .map(|l| l.sent_text().to_string())
+            .unwrap_or_default();
+        {
+            let mut guard = self.world.lock().unwrap();
+            if let Some(w) = guard.as_mut() {
+                w.ptt = false;
+                w.dirty = true;
+                if cancelled {
+                    w.log("sim", "TX aborted");
+                } else if !sent.trim().is_empty() {
+                    w.log("you", sent.trim().to_string());
+                    w.on_our_tx(&sent);
+                }
+            }
+        }
+        self.emit_rig(false);
+        self.tx_busy.store(false, Ordering::SeqCst);
+        Ok(())
+    }
+
+    pub fn live_push(&self, text: &str) -> bool {
+        match self.live.lock().unwrap().as_mut() {
+            Some(live) if !live.is_finishing() => {
+                live.push(text);
+                true
+            }
+            _ => false,
+        }
+    }
+
+    pub fn live_finish(&self) -> bool {
+        if let Some(live) = self.live.lock().unwrap().as_mut() {
+            live.finish();
+            return true;
+        }
+        false
     }
 
     pub fn abort_tx(&self) {

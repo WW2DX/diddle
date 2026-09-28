@@ -44,6 +44,11 @@ pub struct RttyTxGenerator {
     // Used to time the per-character TX echo: a character's audio begins at
     // bit index `bits_appended` (just before its data frame is queued).
     bits_appended: usize,
+
+    // Queued bits that have actually started playing (idle mark between
+    // messages doesn't count). Live keyboard TX times its echo off this,
+    // since its queue can run dry between keystrokes.
+    bits_started: usize,
 }
 
 impl RttyTxGenerator {
@@ -60,6 +65,7 @@ impl RttyTxGenerator {
             current_bit: true, // start in mark (idle)
             figs: false,
             bits_appended: 0,
+            bits_started: 0,
         }
     }
 
@@ -173,7 +179,13 @@ impl RttyTxGenerator {
             self.samples_in_current_bit += 1.0;
             if self.samples_in_current_bit >= self.samples_per_bit {
                 self.samples_in_current_bit -= self.samples_per_bit;
-                self.current_bit = self.bit_queue.pop_front().unwrap_or(true);
+                self.current_bit = match self.bit_queue.pop_front() {
+                    Some(b) => {
+                        self.bits_started += 1;
+                        b
+                    }
+                    None => true,
+                };
             }
         }
     }
@@ -181,6 +193,29 @@ impl RttyTxGenerator {
     /// True once the queue is empty AND the trailing mark bit has finished.
     pub fn is_idle(&self) -> bool {
         self.bit_queue.is_empty() && self.samples_in_current_bit < 1.0
+    }
+
+    /// Queue one LTRS frame — the RTTY "diddle" sent to hold the channel
+    /// between typed characters. Leaves the shift state at LTRS, so a
+    /// following figure gets its FIGS shift automatically.
+    pub fn enqueue_diddle(&mut self) {
+        self.append_frame(LTRS_SHIFT);
+        self.figs = false;
+    }
+
+    /// True when no queued bits remain (the current bit may still be playing).
+    pub fn queue_empty(&self) -> bool {
+        self.bit_queue.is_empty()
+    }
+
+    /// Bits appended so far — the index the next queued bit will get.
+    pub fn bits_appended(&self) -> usize {
+        self.bits_appended
+    }
+
+    /// Queued bits that have started playing (see the field).
+    pub fn bits_started(&self) -> usize {
+        self.bits_started
     }
 
     pub fn samples_per_bit(&self) -> f32 {

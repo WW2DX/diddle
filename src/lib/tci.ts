@@ -44,6 +44,20 @@ export async function transmit(text: string): Promise<void> {
 }
 
 /// Abort any in-flight transmission. No-op when nothing is TXing.
+/// Live keyboard send: keys up and diddles; resolves when the transmission
+/// ends. Don't await it before pushing text.
+export async function txLiveStart(text: string): Promise<void> {
+  await invoke("tx_live_start", { text });
+}
+
+export async function txLivePush(text: string): Promise<void> {
+  await invoke("tx_live_push", { text });
+}
+
+export async function txLiveFinish(): Promise<void> {
+  await invoke("tx_live_finish");
+}
+
 export async function txAbort(): Promise<void> {
   await invoke("tx_abort");
 }

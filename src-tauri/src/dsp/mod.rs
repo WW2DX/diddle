@@ -2,6 +2,7 @@
 
 mod agc;
 mod biquad;
+pub mod live_tx;
 pub mod multi_decoder;
 pub mod pipeline;
 pub mod rtty;
@@ -14,6 +15,7 @@ pub(crate) use biquad::{Biquad, Biquad64};
 pub use multi_decoder::MultiDecoder;
 pub use pipeline::RxPipeline;
 pub use rtty::{RttyConfig, RttyDemod, RttyTunable};
+pub use live_tx::{LiveTx, LIVE_IDLE_TIMEOUT};
 pub use rtty_tx::RttyTxGenerator;
 pub use scope::TuningScope;
 pub use spectrum::Spectrum;

@@ -6,7 +6,7 @@
   onMount(() => settings.load());
 
   function onKey(e: KeyboardEvent) {
-    if (e.key === "Escape" && macroState.txing) {
+    if (e.key === "Escape" && macroState.onAir) {
       // ESC during TX aborts the in-flight transmission and drops PTT.
       e.preventDefault();
       macroState.abort();
@@ -37,7 +37,7 @@
           spellcheck="false"
         />
       </label>
-      {#if macroState.txing}
+      {#if macroState.onAir}
         <span class="tx-indicator">● TX</span>
         <button
           class="abort"

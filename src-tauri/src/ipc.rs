@@ -157,6 +157,37 @@ pub async fn transmit(state: State<'_, AppState>, text: String) -> Result<(), St
     state.tci.transmit(text).await.map_err(|e| e.to_string())
 }
 
+/// Live keyboard send: key up and diddle until text arrives. Resolves when
+/// the transmission ends (finish, abort, or idle timeout) — the frontend
+/// doesn't await it before pushing text.
+#[tauri::command]
+pub async fn tx_live_start(state: State<'_, AppState>, text: String) -> Result<(), String> {
+    if state.sim.is_running() {
+        return state.sim.live_start(text).await.map_err(|e| e.to_string());
+    }
+    state.tci.live_start(text).await.map_err(|e| e.to_string())
+}
+
+/// Queue typed text on the live transmission.
+#[tauri::command]
+pub fn tx_live_push(state: State<'_, AppState>, text: String) -> Result<(), String> {
+    if state.sim.live_push(&text) || state.tci.live_push(&text) {
+        Ok(())
+    } else {
+        Err("no live transmission".into())
+    }
+}
+
+/// Send what's queued on the live transmission, then unkey.
+#[tauri::command]
+pub fn tx_live_finish(state: State<'_, AppState>) -> Result<(), String> {
+    if state.sim.live_finish() || state.tci.live_finish() {
+        Ok(())
+    } else {
+        Err("no live transmission".into())
+    }
+}
+
 /// Abort any in-flight transmission immediately. No-op if nothing is TXing.
 #[tauri::command]
 pub async fn tx_abort(state: State<'_, AppState>) -> Result<(), String> {

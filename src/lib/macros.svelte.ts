@@ -4,7 +4,7 @@
 // Macros are user-editable from the Settings panel and persisted to
 // localStorage. Slot keys (F1..F8) are fixed; label and text are editable.
 
-import { transmit, txAbort } from "$lib/tci";
+import { transmit, txAbort, txLiveStart, txLivePush, txLiveFinish } from "$lib/tci";
 import { settings } from "$lib/settings.svelte";
 import { qsoLog } from "$lib/qsoLog.svelte";
 import { entryBus } from "$lib/entry.svelte";
@@ -35,6 +35,15 @@ function clone(ms: Macro[]): Macro[] {
 class MacroState {
   macros = $state<Macro[]>(clone(DEFAULT_MACROS));
   txing = $state(false);
+  /// A live keyboard send (ad-hoc window) is on the air.
+  live = $state(false);
+  // Pushes and the finish must reach the backend in order.
+  private liveChain: Promise<void> = Promise.resolve();
+
+  /// Anything of ours on the air — a macro or a live keyboard send.
+  get onAir(): boolean {
+    return this.txing || this.live;
+  }
   lastSent = $state<string | null>(null);
   lastError = $state<string | null>(null);
   loaded = $state(false);
@@ -152,6 +161,47 @@ class MacroState {
       return;
     }
     await this.send(m.text, ctx);
+  }
+
+  /// Key up now and diddle, starting with `text` (may be empty). Further
+  /// text goes through `pushLive`; `finishLive` sends what's queued and
+  /// unkeys. Ignored while a macro is transmitting.
+  startLive(text = "") {
+    if (this.live || this.txing) return;
+    this.live = true;
+    this.lastError = null;
+    this.liveChain = Promise.resolve();
+    txLiveStart(text)
+      .catch((e) => {
+        this.lastError = String(e);
+        console.error("live tx failed", e);
+      })
+      .finally(() => {
+        this.live = false;
+      });
+  }
+
+  pushLive(text: string) {
+    if (!text) return;
+    this.liveChain = this.liveChain.then(() => this.retryWhileLive(() => txLivePush(text)));
+  }
+
+  finishLive() {
+    this.liveChain = this.liveChain.then(() => this.retryWhileLive(() => txLiveFinish()));
+  }
+
+  // The start command may not have published the stream yet (a few ms after
+  // the first keystroke) — retry briefly rather than drop text or leave the
+  // rig diddling until the idle timeout.
+  private async retryWhileLive(op: () => Promise<void>) {
+    for (let i = 0; i < 25 && this.live; i++) {
+      try {
+        await op();
+        return;
+      } catch {
+        await new Promise((r) => setTimeout(r, 20));
+      }
+    }
   }
 
   /// Abort an in-flight transmission. Safe to call when not TXing.

@@ -5,6 +5,16 @@ All notable changes to Diddle are documented here. Format loosely follows
 
 ## [Unreleased]
 
+## [0.1.23] — 2026-09-28
+
+### Changed
+- **Ad-hoc send (`Ctrl+K`) now goes on the air as you type.** The first keystroke keys up and the rig diddles (LTRS idles) until there's text, so the other station knows at once you're still there — no more composing a line in silence and waiting half a second for a lead-in after Enter. Three modes, picked in the popup and remembered:
+  - **Word** (default) — each word goes out when you press Space; you can fix a word until then.
+  - **Char** — each key goes out as you type it (Backspace can't recall it).
+  - **Line** — the old behaviour: compose, Enter sends the whole line.
+
+  `Enter` sends whatever is left and unkeys once it's out; `Esc` aborts on the spot. An F-key pressed during a live send joins the same transmission instead of being refused. If nothing is typed for 30 s the rig unkeys by itself. Works against the contest simulator as well as the radio.
+
 ## [0.1.22] — 2026-09-28
 
 ### Added

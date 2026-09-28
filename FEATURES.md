@@ -32,6 +32,7 @@ A complete rundown of what Diddle does today, plus what's planned.
 - **Software AFSK modulator** (`rtty_tx`) — generates the RTTY tones for transmit over TCI; no FSK keying interface required.
 - **Macro-driven sending** with `<MYCALL>`, `<CALL>`, and `<SERIAL>` substitution.
 - **TX abort** — `Esc` (or the abort control) stops an in-flight transmission immediately.
+- **Live keyboard send** (`Ctrl+K` / `Alt+K`) — keys up on the first keystroke and diddles (LTRS idles) between keystrokes, so the other station hears you at once. *Word* mode sends each word on `Space` (default), *Char* sends each key as typed, *Line* composes a whole line and sends it on `Enter`. `Enter` sends what's left and unkeys; `Esc` aborts; F-keys pressed meanwhile join the same transmission; it unkeys by itself after 30 s with nothing typed. Works against the contest simulator too.
 
 ## Macros & keyboard workflow
 

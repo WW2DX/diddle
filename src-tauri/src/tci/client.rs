@@ -10,7 +10,8 @@ use tokio_tungstenite::{connect_async, tungstenite::Message as WsMessage};
 use tracing::{debug, error, info, trace, warn};
 
 use crate::dsp::{
-    MultiDecoder, RttyDemod, RttyTunable, RttyTxGenerator, Spectrum, TuningScope,
+    LiveTx, MultiDecoder, RttyDemod, RttyTunable, RttyTxGenerator, Spectrum, TuningScope,
+    LIVE_IDLE_TIMEOUT,
 };
 use crate::scp::ScpDb;
 use crate::tci::protocol::Message;
@@ -164,9 +165,11 @@ impl BinaryFrameInfo {
 /// In-flight transmission state. The waveform is the full mono signal
 /// (lead-in + message + trail). The TXChrono handler in the run-loop reads
 /// from `position` as the server requests audio.
-struct TxState {
-    waveform: Vec<f32>,
-    position: usize,
+enum TxState {
+    /// A macro: the whole waveform, built before keying.
+    Buffer { waveform: Vec<f32>, position: usize },
+    /// Live keyboard send: audio produced on demand as the radio asks.
+    Live(LiveTx),
 }
 
 pub struct TciClient {
@@ -268,6 +271,11 @@ impl TciClient {
             // radio is broken.
             anyhow::bail!("refusing to transmit empty text");
         }
+        // A macro fired during a live keyboard send joins that
+        // transmission rather than being refused as "TX in progress".
+        if self.live_push(&text) {
+            return Ok(());
+        }
         {
             let mut busy = self.tx_busy.write().await;
             if *busy {
@@ -283,6 +291,97 @@ impl TciClient {
             Some(Instant::now() + Duration::from_millis(RX_MUTE_HOLDOFF_MS));
         *self.tx_busy.write().await = false;
         result
+    }
+
+    /// Live keyboard send: key up now and diddle until text arrives
+    /// (`live_push`) or the operator finishes (`live_finish`). Resolves when
+    /// the transmission is over — finished, aborted, or idle too long.
+    pub async fn live_start(&self, initial: String) -> anyhow::Result<()> {
+        {
+            let mut busy = self.tx_busy.write().await;
+            if *busy {
+                anyhow::bail!("TX already in progress");
+            }
+            *busy = true;
+        }
+        self.tx_cancel.store(false, Ordering::SeqCst);
+        self.rx_mute.store(true, Ordering::SeqCst);
+        let result = self.live_inner(initial).await;
+        self.rx_mute.store(false, Ordering::SeqCst);
+        *self.rx_resume_at.lock().unwrap() =
+            Some(Instant::now() + Duration::from_millis(RX_MUTE_HOLDOFF_MS));
+        *self.tx_busy.write().await = false;
+        result
+    }
+
+    async fn live_inner(&self, initial: String) -> anyhow::Result<()> {
+        let cfg = self.rtty.get().await;
+        let (tx_mark, tx_space) = cfg.tx_tones();
+        info!(mark = tx_mark, space = tx_space, "tx: live start");
+        let mut live = LiveTx::new(TX_SAMPLE_RATE, tx_mark, tx_space, cfg.baud);
+        live.push(&initial);
+        *self.tx_state.lock().unwrap() = Some(TxState::Live(live));
+        self.force_rtty_mode().await;
+        if let Err(e) = self.send("trx:0,true,vac;".to_string()).await {
+            *self.tx_state.lock().unwrap() = None;
+            return Err(e);
+        }
+        let start = Instant::now();
+        loop {
+            if self.tx_cancel.load(Ordering::SeqCst) {
+                info!("tx: live cancelled");
+                return Ok(()); // abort_tx dropped PTT and cleared state
+            }
+            let (echoes, done) = {
+                let mut guard = self.tx_state.lock().unwrap();
+                match guard.as_mut() {
+                    Some(TxState::Live(live)) => {
+                        if !live.is_finishing() && live.idle_for() > LIVE_IDLE_TIMEOUT {
+                            info!("tx: live idle timeout");
+                            live.finish();
+                        }
+                        (live.take_echoes(), live.is_done())
+                    }
+                    _ => (Vec::new(), true),
+                }
+            };
+            for c in echoes {
+                let _ = self.app.emit("tx:echo", c.to_string());
+            }
+            if done {
+                break;
+            }
+            if start.elapsed() > Duration::from_secs(600) {
+                warn!("tx: live hard limit reached");
+                break;
+            }
+            tokio::time::sleep(Duration::from_millis(20)).await;
+        }
+        tokio::time::sleep(Duration::from_millis(150)).await;
+        self.send("trx:0,false,vac;".to_string()).await?;
+        *self.tx_state.lock().unwrap() = None;
+        info!("tx: live done");
+        Ok(())
+    }
+
+    /// Add typed text to the live transmission. False if none is running.
+    pub fn live_push(&self, text: &str) -> bool {
+        match self.tx_state.lock().unwrap().as_mut() {
+            Some(TxState::Live(live)) if !live.is_finishing() => {
+                live.push(text);
+                true
+            }
+            _ => false,
+        }
+    }
+
+    /// Send what's queued, then unkey. False without a live transmission.
+    pub fn live_finish(&self) -> bool {
+        if let Some(TxState::Live(live)) = self.tx_state.lock().unwrap().as_mut() {
+            live.finish();
+            return true;
+        }
+        false
     }
 
     /// True while the RX decode pipeline should stay quiet: during a
@@ -378,7 +477,7 @@ impl TciClient {
         // Publish the waveform for the TXChrono handler, then key up with
         // signal source = VAC (so RHR pulls TX audio from our TCI stream
         // rather than the mic). This `,vac` argument is the critical bit.
-        *self.tx_state.lock().unwrap() = Some(TxState {
+        *self.tx_state.lock().unwrap() = Some(TxState::Buffer {
             waveform,
             position: 0,
         });
@@ -401,7 +500,10 @@ impl TciClient {
                 .lock()
                 .unwrap()
                 .as_ref()
-                .map(|t| t.position)
+                .map(|t| match t {
+                    TxState::Buffer { position, .. } => *position,
+                    TxState::Live(_) => total,
+                })
                 .unwrap_or(total);
             // Echo every character whose audio has now started playing.
             while echo_idx < echo.len() && echo[echo_idx].0 <= position {
@@ -440,16 +542,29 @@ impl TciClient {
         let tx = guard.as_mut()?;
         let frames = requested_floats / 2;
         let mut stereo = Vec::with_capacity(requested_floats);
-        for k in 0..frames {
-            let s = tx.waveform.get(tx.position + k).copied().unwrap_or(0.0);
-            stereo.push(s); // L
-            stereo.push(s); // R
+        match tx {
+            TxState::Buffer { waveform, position } => {
+                for k in 0..frames {
+                    let s = waveform.get(*position + k).copied().unwrap_or(0.0);
+                    stereo.push(s); // L
+                    stereo.push(s); // R
+                }
+                *position += frames;
+            }
+            TxState::Live(live) => {
+                let mut mono = Vec::with_capacity(frames);
+                live.generate(frames, &mut mono);
+                for s in mono {
+                    let s = s * TX_AMPLITUDE;
+                    stereo.push(s);
+                    stereo.push(s);
+                }
+            }
         }
         // Pad to the exact requested length (handles odd request sizes).
         while stereo.len() < requested_floats {
             stereo.push(0.0);
         }
-        tx.position += frames;
         Some(build_tx_audio_frame(trx, sample_rate, &stereo))
     }
 
