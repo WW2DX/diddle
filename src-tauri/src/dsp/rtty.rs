@@ -1,5 +1,10 @@
 // RTTY demodulator.
 //
+// - Channel filter: mix the audio down to complex baseband centred between
+//   mark and space, then an 8th-order Butterworth lowpass on I and Q. That
+//   is a steep bandpass around the pair — a neighbour 400 Hz away is down
+//   ~60 dB — so a strong station elsewhere in the passband no longer leaks
+//   into the correlators and raises the squelch floor over a weak one.
 // - Two quadrature correlators (NCOs at mark/space), matched-filter
 //   integration over one bit period.
 // - Slicer: bigger of mark vs. space magnitude → mark=1, space=0.
@@ -18,7 +23,7 @@ use std::sync::atomic::{AtomicU64, Ordering};
 use serde::{Deserialize, Serialize};
 use tokio::sync::RwLock;
 
-use crate::dsp::{Agc, Biquad};
+use crate::dsp::{Agc, Biquad64};
 
 const FIGS_SHIFT: u8 = 0b11011; // 27
 const LTRS_SHIFT: u8 = 0b11111; // 31
@@ -144,18 +149,15 @@ pub struct RttyDemod {
     // consistent range regardless of source level.
     agc: Agc,
 
-    // Pre-filter: 2-pole bandpass centered between mark and space, ~2.5×
-    // shift wide. Kills out-of-band noise that would otherwise leak through
-    // the boxcar correlator's −13 dB sidelobes. Single biquad chosen over
-    // cascaded — keeps group delay small enough not to disturb bit timing
-    // on clean signals, while still rejecting big adjacent interferers.
-    bp1: Biquad,
+    // Channel filter (see the header): complex mixdown NCO at the pair's
+    // centre, then Butterworth lowpass sections on I and Q.
+    mix: Phasor,
+    lp_i: Vec<Biquad64>,
+    lp_q: Vec<Biquad64>,
 
-    // NCO phases / increments for mark and space.
-    mark_phase: f32,
-    space_phase: f32,
-    mark_phase_inc: f32,
-    space_phase_inc: f32,
+    // Baseband NCOs for mark and space (their offsets from the centre).
+    mark_nco: Phasor,
+    space_nco: Phasor,
 
     // Sliding boxcar matched filter — circular buffers for the four
     // correlator outputs (I/Q of mark, I/Q of space) and their running sums.
@@ -190,6 +192,53 @@ pub struct RttyDemod {
 
     // Baudot shift state.
     figs: bool,
+}
+
+/// Butterworth order of the channel filter. 8 = four biquad sections:
+/// ~48 dB/octave skirts, still flat across both tones and their keying
+/// sidebands, with group delay (~5 ms) well under a 22 ms bit.
+const CHANNEL_ORDER: usize = 8;
+
+/// Channel lowpass cutoff at baseband: half the shift plus room for the
+/// keying sidebands (~1.65× baud each side). 160 Hz for 170/45.45.
+fn channel_cutoff_hz(shift_hz: f32, baud: f32) -> f32 {
+    0.5 * shift_hz + (1.65 * baud).max(60.0)
+}
+
+/// Unit phasor NCO: rotates by a fixed angle per sample, renormalised now
+/// and then so f32 rounding can't let its magnitude drift.
+struct Phasor {
+    re: f32,
+    im: f32,
+    step_re: f32,
+    step_im: f32,
+    n: u32,
+}
+
+impl Phasor {
+    /// A phasor turning at `hz` (negative = clockwise) for `sr` samples/s.
+    fn new(hz: f32, sr: f32) -> Self {
+        let w = (TAU as f64) * hz as f64 / sr as f64;
+        Self { re: 1.0, im: 0.0, step_re: w.cos() as f32, step_im: w.sin() as f32, n: 0 }
+    }
+
+    /// Current (cos, sin), then advance one sample.
+    #[inline]
+    fn next(&mut self) -> (f32, f32) {
+        let out = (self.re, self.im);
+        let re = self.re * self.step_re - self.im * self.step_im;
+        let im = self.re * self.step_im + self.im * self.step_re;
+        self.re = re;
+        self.im = im;
+        self.n += 1;
+        if self.n >= 1024 {
+            self.n = 0;
+            let m = (self.re * self.re + self.im * self.im).sqrt();
+            self.re /= m;
+            self.im /= m;
+        }
+        out
+    }
 }
 
 // Lower hysteresis is OK now that AGC + bandpass clean up the noise
@@ -231,16 +280,16 @@ impl RttyDemod {
         // shifts the filter scales up so the signal still fits.
         let center = 0.5 * (cfg.mark_hz + cfg.space_hz);
         let shift = (cfg.space_hz - cfg.mark_hz).abs();
-        let bw = (shift + 130.0).max(300.0);
-        let q = center / bw;
-        let bp1 = Biquad::bandpass(sr, center, q);
         let agc = Agc::new(sample_rate, 0.2, 1.0);
+        let cutoff = channel_cutoff_hz(shift, cfg.baud) as f64;
+        let lp = Biquad64::butterworth_lowpass(sr as f64, cutoff, CHANNEL_ORDER);
 
         Self {
-            mark_phase: 0.0,
-            space_phase: 0.0,
-            mark_phase_inc: TAU * cfg.mark_hz / sr,
-            space_phase_inc: TAU * cfg.space_hz / sr,
+            mix: Phasor::new(-center, sr),
+            lp_i: lp.clone(),
+            lp_q: lp,
+            mark_nco: Phasor::new(-(cfg.mark_hz - center), sr),
+            space_nco: Phasor::new(-(cfg.space_hz - center), sr),
             samples_per_bit: spb,
             int_len,
             total_samples: 0,
@@ -248,7 +297,6 @@ impl RttyDemod {
             prev_data_bit: true,
             have_transition: false,
             agc,
-            bp1,
             mark_i_buf: vec![0.0; int_len],
             mark_q_buf: vec![0.0; int_len],
             space_i_buf: vec![0.0; int_len],
@@ -282,27 +330,28 @@ impl RttyDemod {
 
     fn process_sample(&mut self, s: f32) -> Option<char> {
         self.total_samples = self.total_samples.wrapping_add(1);
-        // AGC first — normalizes long-term level. Then bandpass tightens
-        // the spectrum around mark/space.
+        // AGC first — normalizes long-term level.
         let s = self.agc.process(s);
-        let s = self.bp1.process(s);
 
-        // Multiply by complex exponential at mark/space freqs.
-        let (mc, ms) = (self.mark_phase.cos(), self.mark_phase.sin());
-        let (sc, ss) = (self.space_phase.cos(), self.space_phase.sin());
-        let mi = s * mc;
-        let mq = s * ms;
-        let si = s * sc;
-        let sq = s * ss;
+        // Channel filter: complex mixdown to the pair's centre, lowpass I/Q.
+        let (c, sn) = self.mix.next();
+        let mut zi = (s * c) as f64;
+        let mut zq = (s * sn) as f64;
+        for f in self.lp_i.iter_mut() {
+            zi = f.process(zi);
+        }
+        for f in self.lp_q.iter_mut() {
+            zq = f.process(zq);
+        }
+        let (zi, zq) = (zi as f32, zq as f32);
 
-        self.mark_phase += self.mark_phase_inc;
-        if self.mark_phase > TAU {
-            self.mark_phase -= TAU;
-        }
-        self.space_phase += self.space_phase_inc;
-        if self.space_phase > TAU {
-            self.space_phase -= TAU;
-        }
+        // Correlate against mark and space: z · e^{-jωt} at each offset.
+        let (mc, ms) = self.mark_nco.next();
+        let (sc, ss) = self.space_nco.next();
+        let mi = zi * mc - zq * ms;
+        let mq = zi * ms + zq * mc;
+        let si = zi * sc - zq * ss;
+        let sq = zi * ss + zq * sc;
 
         // Sliding boxcar (matched filter over one bit period).
         let idx = self.buf_idx;
@@ -561,5 +610,143 @@ mod tests {
         signal.extend(synth_char_signal(22, &cfg, sr));
         let text = d.push(&signal);
         assert!(text.contains('0'), "expected '0' after FIGS, got: {:?}", text);
+    }
+}
+
+/// Copy of a weak station with a strong one elsewhere in the passband —
+/// the CQ WW RTTY case. `cargo test adjacent_report -- --ignored --nocapture`
+/// prints the full grid; the non-ignored tests pin the cases that matter.
+#[cfg(test)]
+mod adjacent_tests {
+    use super::*;
+    use crate::dsp::RttyTxGenerator;
+    use rand::{rngs::StdRng, Rng, SeedableRng};
+
+    const SR: u32 = 48_000;
+    const TARGET: &str = "CQ TEST DE K6AC K6AC 599 05 CA TU DE W1AW 599 05 CT";
+
+    fn key(mark: f32, text: &str, len: usize) -> Vec<f32> {
+        let mut g = RttyTxGenerator::new(SR, mark, mark + 170.0, 45.45);
+        let spb = g.samples_per_bit();
+        let mut w = Vec::with_capacity(len);
+        g.next_samples((10.0 * spb) as usize, &mut w);
+        g.enqueue(text);
+        while !g.is_idle() && w.len() < len {
+            g.next_samples(256, &mut w);
+        }
+        w.resize(len, 0.0);
+        w
+    }
+
+    fn lev(a: &str, b: &str) -> usize {
+        let a: Vec<char> = a.chars().collect();
+        let b: Vec<char> = b.chars().collect();
+        let mut prev: Vec<usize> = (0..=b.len()).collect();
+        for i in 1..=a.len() {
+            let mut cur = vec![i; b.len() + 1];
+            for j in 1..=b.len() {
+                let c = if a[i - 1] == b[j - 1] { 0 } else { 1 };
+                cur[j] = (prev[j] + 1).min(cur[j - 1] + 1).min(prev[j - 1] + c);
+            }
+            prev = cur;
+        }
+        prev[b.len()]
+    }
+
+    /// Fraction of TARGET copied correctly (1.0 = perfect), best alignment
+    /// of the target within the decoded text.
+    fn copy_score(target_db: f32, intf_offset_hz: Option<f32>, noise_rms: f32, seed: u64) -> f32 {
+        let len = {
+            let g = RttyTxGenerator::new(SR, 2125.0, 2295.0, 45.45);
+            let spb = g.samples_per_bit();
+            ((TARGET.len() as f32 + 20.0) * 7.5 * spb) as usize
+        };
+        let target = key(2125.0, &format!("  {TARGET}  "), len);
+        let amp = 10f32.powf(target_db / 20.0);
+        let mut rng = StdRng::seed_from_u64(seed);
+        let intf = intf_offset_hz.map(|off| {
+            // A busy neighbour: keying the whole time.
+            let txt: String = (0..400)
+                .map(|_| (b'A' + rng.gen_range(0..26)) as char)
+                .collect();
+            key(2125.0 + off, &txt, len)
+        });
+        let mut wave = Vec::with_capacity(len);
+        for i in 0..len {
+            // Box–Muller white noise.
+            let u1: f32 = rng.gen_range(1e-7..1.0);
+            let u2: f32 = rng.gen();
+            let n = (-2.0 * u1.ln()).sqrt() * (TAU * u2).cos() * noise_rms;
+            let x = target[i] * amp + intf.as_ref().map_or(0.0, |v| v[i]) + n;
+            wave.push(x);
+        }
+        let mut d = RttyDemod::new(SR, RttyConfig::default());
+        let mut out = String::new();
+        for c in wave.chunks(512) {
+            out.push_str(&d.push(c));
+        }
+        let out = out.replace('\n', " ");
+        // Best window of the decoded text against the target.
+        let tl = TARGET.chars().count();
+        let oc: Vec<char> = out.chars().collect();
+        let mut best = tl;
+        if oc.len() <= tl + 4 {
+            best = lev(&out, TARGET);
+        } else {
+            for s in 0..=(oc.len() - tl) {
+                for w in [tl.saturating_sub(4), tl, tl + 4] {
+                    if s + w > oc.len() { continue; }
+                    let win: String = oc[s..s + w].iter().collect();
+                    best = best.min(lev(&win, TARGET));
+                }
+            }
+        }
+        1.0 - best as f32 / tl as f32
+    }
+
+    fn avg(target_db: f32, off: Option<f32>, noise: f32) -> f32 {
+        (0..3).map(|s| copy_score(target_db, off, noise, 7 + s)).sum::<f32>() / 3.0
+    }
+
+    // Old single-biquad front end: 0.32 here (neighbour leaked in).
+    #[test]
+    fn copies_weak_station_30db_under_neighbour_400hz_away() {
+        let c = avg(-30.0, Some(400.0), 0.02);
+        assert!(c > 0.85, "copy {c:.2}");
+    }
+
+    // Old front end: 0.14.
+    #[test]
+    fn copies_weak_station_40db_under_neighbour_600hz_away() {
+        let c = avg(-40.0, Some(600.0), 0.02);
+        assert!(c > 0.85, "copy {c:.2}");
+    }
+
+    // The channel filter must not cost sensitivity in plain noise
+    // (old front end: 0.80).
+    #[test]
+    fn weak_signal_in_noise_not_worse() {
+        let c = avg(-40.0, None, 0.05);
+        assert!(c > 0.75, "copy {c:.2}");
+    }
+
+    #[test]
+    #[ignore]
+    fn adjacent_report() {
+        let noise = 0.02;
+        println!("target dB below neighbour | offset Hz: none  250  400  600  1000");
+        for tdb in [-20.0f32, -30.0, -40.0] {
+            let row: Vec<String> = [None, Some(250.0), Some(400.0), Some(600.0), Some(1000.0)]
+                .iter()
+                .map(|o| format!("{:.2}", avg(tdb, *o, noise)))
+                .collect();
+            println!("{tdb:>6} dB: {}", row.join("  "));
+        }
+        println!("noise only, target -40 dB | noise rms: 0.02 0.05 0.08 0.11 0.14 0.17");
+        let row: Vec<String> = [0.02f32, 0.05, 0.08, 0.11, 0.14, 0.17]
+            .iter()
+            .map(|n| format!("{:.2}", avg(-40.0, None, *n)))
+            .collect();
+        println!("            {}", row.join("  "));
     }
 }

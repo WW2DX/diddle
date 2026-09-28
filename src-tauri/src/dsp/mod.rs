@@ -10,7 +10,7 @@ pub mod scope;
 pub mod spectrum;
 
 pub(crate) use agc::Agc;
-pub(crate) use biquad::Biquad;
+pub(crate) use biquad::{Biquad, Biquad64};
 pub use multi_decoder::MultiDecoder;
 pub use pipeline::RxPipeline;
 pub use rtty::{RttyConfig, RttyDemod, RttyTunable};
