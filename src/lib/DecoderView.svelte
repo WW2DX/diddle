@@ -53,6 +53,10 @@
     "BK", "BREAK", "AGN", "PSE",
     "RST", "RTTY",
   ]);
+  // Operating words that are also a state/province in an exchange: DE
+  // (Delaware) and SK (Saskatchewan). Clicking one is deliberate, so it
+  // goes into Exch even though the noise filter treats it as a marker.
+  const REGION_MARKERS = new Set(["DE", "SK"]);
   // Maidenhead grid square (4 or 6 char).
   const GRID_RE = /^[A-R]{2}\d{2}([A-X]{2})?$/;
   // Callsign shapes — kept liberal so every plausible call is clickable,
@@ -96,7 +100,7 @@
     const w = wordAt(e.clientX, e.clientY);
     if (!w) return;
     const u = w.toUpperCase();
-    if (u.length > 12 || MARKERS.has(u) || isCallToken(u)) return;
+    if (u.length > 12 || (MARKERS.has(u) && !REGION_MARKERS.has(u)) || isCallToken(u)) return;
     entryBus.addExchWord(u);
   }
 

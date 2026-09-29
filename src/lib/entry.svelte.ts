@@ -24,6 +24,13 @@ class EntryBus {
     this.token++;
   }
 
+  /// The TU macro (F3) was sent by hand — EntryWindow logs the QSO in Run
+  /// mode with ESM on, like the ESM Enter step does.
+  tuToken = $state<number>(0);
+  tuSent() {
+    this.tuToken++;
+  }
+
   addExchWord(w: string) {
     this.requestedExchWord = w;
     this.exchToken++;

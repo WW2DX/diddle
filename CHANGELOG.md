@@ -5,6 +5,13 @@ All notable changes to Diddle are documented here. Format loosely follows
 
 ## [Unreleased]
 
+### Changed
+- **Ad-hoc send keys up the moment the window opens** (Word and Char modes), diddling until you type — the other station hears you straight away instead of after your first character or word. Line mode still waits for Enter. `Esc` before you've sent anything aborts *and* closes the window, so an accidental `Alt+K` is one keystroke to undo.
+
+### Fixed
+- **Sending TU by hand (F3 key or button) didn't log the QSO** — only the ESM Enter step did. In Run with ESM on, a TU that goes out now logs the contact the same way. If Exch is empty (easy to miss with CQ WW DX stations, whose exchange is only the zone), the entry window says *TU sent — NOT logged: Exch is empty* and puts you in Exch, instead of silently not logging.
+- **"DE" (Delaware) and "SK" (Saskatchewan) couldn't be clicked into Exch** from the RX window — they were ignored as the operating words "this is" and "end of contact". A click on either now adds it to the exchange.
+
 ## [0.1.23] — 2026-09-28
 
 ### Changed

@@ -256,6 +256,31 @@
     });
   });
 
+  // TU (F3) sent by hand in Run with ESM on: log the QSO, as ESM's TU step
+  // does. If there's a call but no exchange, say so rather than leave the
+  // operator thinking it was logged (CQ WW DX stations send only a zone —
+  // it still has to go in Exch).
+  let lastTuToken = 0;
+  let notice = $state<string | null>(null);
+  let noticeTimer: ReturnType<typeof setTimeout> | null = null;
+  function flashNotice(msg: string) {
+    notice = msg;
+    if (noticeTimer) clearTimeout(noticeTimer);
+    noticeTimer = setTimeout(() => (notice = null), 4000);
+  }
+  $effect(() => {
+    const t = entryBus.tuToken;
+    if (t === lastTuToken) return;
+    lastTuToken = t;
+    if (!settings.esm || settings.spMode) return;
+    if (canLog) {
+      logQso();
+    } else if (normalizeCall(call).length >= 3) {
+      flashNotice("TU sent — NOT logged: Exch is empty");
+      queueMicrotask(() => exchInput?.focus());
+    }
+  });
+
   function normalizeCall(s: string): string {
     return s
       .toUpperCase()
@@ -496,6 +521,9 @@
       {/if}
       {#if dupe}
         <span class="dupe-flag">DUPE</span>
+      {/if}
+      {#if notice}
+        <span class="del-pending">{notice}</span>
       {/if}
       {#if pendingDelete}
         <span class="del-pending">Ctrl+D again deletes {pendingDelete.call}</span>

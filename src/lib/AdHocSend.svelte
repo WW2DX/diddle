@@ -1,9 +1,9 @@
 <script lang="ts">
   // Ad-hoc keyboard send — WriteLog Alt-K / N1MM Ctrl-K style.
   //
-  // Word and Char modes go on the air as you type: the first keystroke keys
-  // up and the rig diddles (LTRS idles) until there's text to send, so the
-  // other station knows at once you're still there.
+  // Word and Char modes go on the air the moment the window opens: the rig
+  // diddles (LTRS idles) until there's text to send, so the other station
+  // knows at once you're still there.
   //   Word — each word is sent when you hit Space (you can fix a word until
   //          then). Default.
   //   Char — each key is sent as it's typed (Backspace can't recall it).
@@ -33,6 +33,7 @@
 
   function setMode(m: Mode) {
     mode = m;
+    if (open && m !== "line" && !macroState.onAir) goLive("");
     try {
       localStorage.setItem(MODE_KEY, m);
     } catch {}
@@ -57,7 +58,12 @@
   function toggle() {
     if (open && macroState.live) finish(); // closing mid-send finishes it
     open = !open;
-    if (open) histIdx = -1;
+    if (open) {
+      histIdx = -1;
+      // Key up and start diddling right away — unless we're composing a
+      // line, or a macro is already on the air.
+      if (mode !== "line" && !macroState.onAir) goLive("");
+    }
   }
 
   // Focus lands on the input whenever the popup opens (the effect runs
@@ -140,10 +146,13 @@
     } else if (e.key === "Escape") {
       e.preventDefault();
       if (macroState.onAir) {
-        // Abort on the spot; keep the window open. (The global F-keys
-        // handler also aborts; abort is idempotent.)
+        // Abort on the spot. (The global F-keys handler also aborts; abort
+        // is idempotent.) Nothing sent yet — an Alt+K by mistake — closes
+        // the window too; otherwise it stays open for another try.
+        const nothingSent = macroState.live && !sentLine && !text;
         macroState.abort();
         text = "";
+        if (nothingSent) open = false;
       } else {
         open = false;
       }
@@ -165,8 +174,8 @@
   }
 
   const PLACEHOLDER: Record<Mode, string> = {
-    word: "TYPE — KEYS UP AT ONCE, EACH WORD GOES ON SPACE…",
-    char: "TYPE — EACH KEY GOES ON THE AIR AS TYPED…",
+    word: "ON THE AIR — EACH WORD GOES ON SPACE…",
+    char: "ON THE AIR — EACH KEY GOES AS TYPED…",
     line: "TYPE AND HIT ENTER TO TRANSMIT…",
   };
 
@@ -188,9 +197,9 @@
               class:on={mode === m}
               onclick={() => setMode(m)}
               title={m === "word"
-                ? "Live: each word goes out when you press Space; diddles fill the gaps"
+                ? "Live: keys up when the window opens; each word goes out when you press Space; diddles fill the gaps"
                 : m === "char"
-                  ? "Live: each key goes out as you type it; diddles fill the gaps"
+                  ? "Live: keys up when the window opens; each key goes out as you type it; diddles fill the gaps"
                   : "Compose the whole line, Enter sends it"}
             >{m}</button>
           {/each}

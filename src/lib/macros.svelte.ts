@@ -133,18 +133,21 @@ class MacroState {
   /// Send arbitrary text (ad-hoc keyboard send). Runs the same token
   /// expansion as macros and drives the shared txing/lastSent/lastError
   /// state so the TX indicator and ESC-abort behave identically.
-  async send(text: string, ctx: { call?: string } = {}): Promise<void> {
-    if (this.txing) return;
+  /// Resolves true once the text went out (or joined a live send).
+  async send(text: string, ctx: { call?: string } = {}): Promise<boolean> {
+    if (this.txing) return false;
     const expanded = this.expand(text, ctx);
-    if (expanded.trim().length === 0) return;
+    if (expanded.trim().length === 0) return false;
     this.lastError = null;
     this.lastSent = expanded;
     this.txing = true;
     try {
       await transmit(expanded);
+      return true;
     } catch (e: any) {
       this.lastError = String(e);
       console.error("send failed", e);
+      return false;
     } finally {
       this.txing = false;
     }
@@ -152,15 +155,16 @@ class MacroState {
 
   /// Fire a macro by F-key (`F1`..) or label (`CQ`, `Excg`, ...). Prefer
   /// F-keys so renaming labels doesn't break ESM/Enter behavior.
-  async fire(key: string, ctx: { call?: string } = {}): Promise<void> {
-    if (this.txing) return;
+  /// Resolves true once the macro went out.
+  async fire(key: string, ctx: { call?: string } = {}): Promise<boolean> {
+    if (this.txing) return false;
     const m = this.macros.find((x) => x.key === key || x.label === key);
-    if (!m) return;
+    if (!m) return false;
     if (this.expand(m.text, ctx).trim().length === 0) {
       this.lastError = `macro ${m.key} (${m.label}) is empty — nothing to send`;
-      return;
+      return false;
     }
-    await this.send(m.text, ctx);
+    return this.send(m.text, ctx);
   }
 
   /// Key up now and diddle, starting with `text` (may be empty). Further

@@ -2,6 +2,7 @@
   import { onMount } from "svelte";
   import { settings } from "$lib/settings.svelte";
   import { macroState } from "$lib/macros.svelte";
+  import { entryBus } from "$lib/entry.svelte";
 
   onMount(() => settings.load());
 
@@ -14,7 +15,14 @@
     }
     if (!/^F[1-8]$/.test(e.key)) return;
     e.preventDefault();
-    macroState.fire(e.key);
+    fireKey(e.key);
+  }
+
+  // F3 is the TU slot (ESM sends it too): once it's gone out, let the entry
+  // window log the QSO the way ESM's TU step would.
+  async function fireKey(key: string) {
+    const sent = await macroState.fire(key);
+    if (sent && key === "F3") entryBus.tuSent();
   }
 
   $effect(() => {
@@ -53,7 +61,7 @@
   <div class="grid">
     {#each macroState.macros as m}
       <button
-        onclick={() => macroState.fire(m.key)}
+        onclick={() => fireKey(m.key)}
         title={macroState.expand(m.text)}
         disabled={macroState.txing}
       >
