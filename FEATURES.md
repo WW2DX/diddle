@@ -4,7 +4,7 @@ A complete rundown of what Diddle does today, plus what's planned.
 
 ## Radio integration (TCI)
 
-- **TCI WebSocket client** — connects to any TCI server (ExpertSDR2/3, SunSDR, [RemoteHamRadio](https://www.remotehamradio.com/), and compatibles). Default `ws://localhost:40001`.
+- **TCI WebSocket client** — connects to any TCI server (ExpertSDR2/3, SunSDR, [RemoteHamRadio](https://www.remotehamradio.com/), and compatibles). Default `ws://localhost:40001`. Detects ExpertSDR from its `protocol:` announcement and uses the spec's TX audio handshake (`trx:…,tci`, mono float32 stream); RemoteHamRadio gets its own dialect.
 - **Live rig state** — frequency, mode, and PTT reflected in the header in real time.
 - **Rig control** — set frequency (click a spot or waterfall tag to QSY), set mode, key/unkey PTT.
 - **Audio + spectrum streaming** — pulls the radio's RX stream over TCI to feed the software decoder and waterfall.

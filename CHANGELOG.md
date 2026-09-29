@@ -5,6 +5,12 @@ All notable changes to Diddle are documented here. Format loosely follows
 
 ## [Unreleased]
 
+## [0.1.25] — 2026-09-29
+
+### Fixed
+- **No transmit audio on SunSDR / ExpertSDR** — the radio keyed up but sent nothing ([#3](https://github.com/WW2DX/diddle/issues/3)). Diddle keyed up with `trx:0,true,vac`, which RemoteHamRadio's server needs, but the TCI spec (and ExpertSDR) only takes a program's audio when keyed with `trx:0,true,tci` — otherwise it transmits the selected microphone. Diddle now reads the server's `protocol:` announcement on connect and, for ExpertSDR, follows the spec: keys with `tci`, asks for a 48 kHz float32 mono audio stream (in DIGL/DIGU a two-channel stream is I/Q, not left/right), and labels its TX audio correctly — float32 as format 3 and the channel count filled in ([#1](https://github.com/WW2DX/diddle/issues/1)). RemoteHamRadio behaves exactly as before.
+- **Dead carrier when the radio never asks for audio.** If the radio keys up but hasn't requested any TX audio within 2.5 s, Diddle now unkeys and says so, instead of holding PTT for up to a minute.
+
 ## [0.1.24] — 2026-09-29
 
 ### Changed

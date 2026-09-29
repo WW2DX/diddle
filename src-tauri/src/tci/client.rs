@@ -30,9 +30,48 @@ const TX_SAMPLE_RATE: u32 = 48_000;
 // TCI binary message type for a TXChrono request (server asks us for N
 // samples). We reply with a TXAudioStream message of that size.
 const TX_CHRONO_TYPE: u32 = 3;
-// TCI float32 format code is 4 (per the ftl/tci reference that drives
-// WSJT-X ↔ ExpertSDR). NOT 3.
-const TX_FORMAT_F32: u32 = 4;
+// Sample-format code in the TX audio header. The TCI spec (and ExpertSDR)
+// say float32 = 3; RHR's server wants 4, as the ftl/tci Go library sends.
+// See `TciFlavor`.
+const TX_FORMAT_F32_SPEC: u32 = 3;
+const TX_FORMAT_F32_RHR: u32 = 4;
+// Unkey and report an error if the radio hasn't asked for any TX audio
+// this long after we keyed up — otherwise a server that ignores our audio
+// source would leave a dead carrier on the air until the 60 s timeout.
+const NO_CHRONO_TIMEOUT: Duration = Duration::from_millis(2500);
+
+/// Which TCI dialect the server speaks, from its `protocol:` announcement.
+///
+/// ExpertSDR (SunSDR, ColibriNANO…) follows the published TCI spec: TX
+/// audio is taken from the TCI stream only when keyed with `trx:0,true,tci`
+/// (anything else transmits the selected microphone), the float32 format
+/// code is 3, and the header carries the channel count. RemoteHamRadio's
+/// server — what Diddle was first built against — needs `vac` and format 4,
+/// and is left exactly as it was. Unknown servers get the RHR behaviour.
+#[derive(Debug, Clone, Copy, PartialEq)]
+enum TciFlavor {
+    Spec,
+    Rhr,
+}
+
+impl TciFlavor {
+    fn from_protocol(name: &str) -> Self {
+        let n = name.to_ascii_lowercase();
+        if n.starts_with("expertsdr") || n.contains("sunsdr") {
+            TciFlavor::Spec
+        } else {
+            TciFlavor::Rhr
+        }
+    }
+
+    fn ptt(self, on: bool) -> String {
+        match (self, on) {
+            (TciFlavor::Spec, true) => "trx:0,true,tci;".to_string(),
+            (TciFlavor::Spec, false) => "trx:0,false;".to_string(),
+            (TciFlavor::Rhr, on) => format!("trx:0,{on},vac;"),
+        }
+    }
+}
 // Stay below full scale so the radio's TX chain has headroom.
 const TX_AMPLITUDE: f32 = 0.6;
 // Sideband our AFSK RTTY tones assume. We force the radio into DIGL on
@@ -46,17 +85,24 @@ const RX_MUTE_HOLDOFF_MS: u64 = 300;
 
 /// Build a TCI TXAudioStream binary message from interleaved-stereo f32
 /// samples. Header is the standard 64-byte layout (7 u32 fields + reserved).
-fn build_tx_audio_frame(trx: u32, sample_rate: u32, stereo_samples: &[f32]) -> Vec<u8> {
+fn build_tx_audio_frame(
+    trx: u32,
+    sample_rate: u32,
+    format: u32,
+    channels: u32,
+    stereo_samples: &[f32],
+) -> Vec<u8> {
     let n = stereo_samples.len();
     let mut buf = Vec::with_capacity(AUDIO_HEADER_BYTES + n * 4);
-    let header: [u32; 7] = [
+    let header: [u32; 8] = [
         trx,
         sample_rate,
-        TX_FORMAT_F32,
+        format,
         0,        // codec
         0,        // crc
-        n as u32, // DataLength = number of f32 values (interleaved L,R)
+        n as u32, // length = number of f32 values (all channels)
         TX_STREAM_TYPE,
+        channels, // 0 for RHR (as before); 1 or 2 per the spec
     ];
     for w in &header {
         buf.extend_from_slice(&w.to_le_bytes());
@@ -196,6 +242,10 @@ pub struct TciClient {
     /// When we last pushed DIGL back after the rig reported another mode.
     /// Rate-limits the guard so a radio that refuses DIGL can't ping-pong.
     last_mode_fix: std::sync::Mutex<Option<Instant>>,
+    /// Server dialect, set from its `protocol:` line on connect.
+    flavor: std::sync::Mutex<TciFlavor>,
+    /// The radio has asked for TX audio since we last keyed up.
+    chrono_seen: AtomicBool,
 }
 
 impl TciClient {
@@ -213,6 +263,8 @@ impl TciClient {
             rx_mute: AtomicBool::new(false),
             rx_resume_at: std::sync::Mutex::new(None),
             last_mode_fix: std::sync::Mutex::new(None),
+            flavor: std::sync::Mutex::new(TciFlavor::Rhr),
+            chrono_seen: AtomicBool::new(false),
         }
     }
 
@@ -322,7 +374,7 @@ impl TciClient {
         live.push(&initial);
         *self.tx_state.lock().unwrap() = Some(TxState::Live(live));
         self.force_rtty_mode().await;
-        if let Err(e) = self.send("trx:0,true,vac;".to_string()).await {
+        if let Err(e) = self.key_up().await {
             *self.tx_state.lock().unwrap() = None;
             return Err(e);
         }
@@ -332,6 +384,7 @@ impl TciClient {
                 info!("tx: live cancelled");
                 return Ok(()); // abort_tx dropped PTT and cleared state
             }
+            self.check_no_chrono(start).await?;
             let (echoes, done) = {
                 let mut guard = self.tx_state.lock().unwrap();
                 match guard.as_mut() {
@@ -358,7 +411,7 @@ impl TciClient {
             tokio::time::sleep(Duration::from_millis(20)).await;
         }
         tokio::time::sleep(Duration::from_millis(150)).await;
-        self.send("trx:0,false,vac;".to_string()).await?;
+        self.send(self.flavor().ptt(false)).await?;
         *self.tx_state.lock().unwrap() = None;
         info!("tx: live done");
         Ok(())
@@ -414,7 +467,7 @@ impl TciClient {
         *self.tx_state.lock().unwrap() = None;
         // Drop PTT. The waiting `transmit_inner` will also try this when
         // it sees the cancel; sending twice is harmless.
-        let _ = self.send("trx:0,false,vac;".to_string()).await;
+        let _ = self.send(self.flavor().ptt(false)).await;
         info!("tx: aborted");
         Ok(())
     }
@@ -484,7 +537,7 @@ impl TciClient {
         // Force DIGL right before keying so a mode change on the rig can't put
         // us on the wrong sideband mid-contest.
         self.force_rtty_mode().await;
-        self.send("trx:0,true,vac;".to_string()).await?;
+        self.key_up().await?;
 
         // Wait until the chrono handler has streamed the whole waveform
         // (or a generous timeout). The handler advances `position`.
@@ -495,6 +548,7 @@ impl TciClient {
                 cancelled = true;
                 break;
             }
+            self.check_no_chrono(start).await?;
             let position = self
                 .tx_state
                 .lock()
@@ -528,7 +582,7 @@ impl TciClient {
         // Brief grace period so the last requested chunk plays out.
         tokio::time::sleep(Duration::from_millis(150)).await;
 
-        self.send("trx:0,false,vac;".to_string()).await?;
+        self.send(self.flavor().ptt(false)).await?;
         *self.tx_state.lock().unwrap() = None;
         info!("tx: done");
         Ok(())
@@ -537,35 +591,52 @@ impl TciClient {
     /// Respond to a TXChrono request: hand the server the next
     /// `requested_floats` interleaved-stereo samples from the active TX
     /// waveform. Returns None if no transmission is in flight.
-    fn build_chrono_response(&self, trx: u32, sample_rate: u32, requested_floats: usize) -> Option<Vec<u8>> {
+    fn build_chrono_response(
+        &self,
+        trx: u32,
+        sample_rate: u32,
+        requested_channels: u32,
+        requested_floats: usize,
+    ) -> Option<Vec<u8>> {
+        let flavor = self.flavor();
         let mut guard = self.tx_state.lock().unwrap();
         let tx = guard.as_mut()?;
-        let frames = requested_floats / 2;
-        let mut stereo = Vec::with_capacity(requested_floats);
+        self.chrono_seen.store(true, Ordering::SeqCst);
+        // Spec servers: answer in the channel count they asked for (we ask
+        // for mono on connect — two channels in DIGL/DIGU would be taken as
+        // I/Q). RHR: interleaved stereo with a zero channel field, as ever.
+        let (channels, header_channels, format) = match flavor {
+            TciFlavor::Spec if requested_channels == 1 => (1usize, 1u32, TX_FORMAT_F32_SPEC),
+            TciFlavor::Spec => (2, 2, TX_FORMAT_F32_SPEC),
+            TciFlavor::Rhr => (2, 0, TX_FORMAT_F32_RHR),
+        };
+        let frames = requested_floats / channels;
+        let mut mono = Vec::with_capacity(frames);
         match tx {
             TxState::Buffer { waveform, position } => {
                 for k in 0..frames {
-                    let s = waveform.get(*position + k).copied().unwrap_or(0.0);
-                    stereo.push(s); // L
-                    stereo.push(s); // R
+                    mono.push(waveform.get(*position + k).copied().unwrap_or(0.0));
                 }
                 *position += frames;
             }
             TxState::Live(live) => {
-                let mut mono = Vec::with_capacity(frames);
                 live.generate(frames, &mut mono);
-                for s in mono {
-                    let s = s * TX_AMPLITUDE;
-                    stereo.push(s);
-                    stereo.push(s);
+                for s in mono.iter_mut() {
+                    *s *= TX_AMPLITUDE;
                 }
             }
         }
-        // Pad to the exact requested length (handles odd request sizes).
-        while stereo.len() < requested_floats {
-            stereo.push(0.0);
+        let mut out = Vec::with_capacity(requested_floats);
+        for s in mono {
+            for _ in 0..channels {
+                out.push(s);
+            }
         }
-        Some(build_tx_audio_frame(trx, sample_rate, &stereo))
+        // Pad to the exact requested length (handles odd request sizes).
+        while out.len() < requested_floats {
+            out.push(0.0);
+        }
+        Some(build_tx_audio_frame(trx, sample_rate, format, header_channels, &out))
     }
 
     async fn set_state(&self, s: TciState) {
@@ -578,6 +649,31 @@ impl TciClient {
     /// change back as a `modulation:0,digl` message, which updates rig state.
     async fn force_rtty_mode(&self) {
         let _ = self.send(format!("modulation:0,{};", RTTY_MODE)).await;
+    }
+
+    fn flavor(&self) -> TciFlavor {
+        *self.flavor.lock().unwrap()
+    }
+
+    /// Key up in this server's dialect and start watching for its first
+    /// request for TX audio.
+    async fn key_up(&self) -> anyhow::Result<()> {
+        self.chrono_seen.store(false, Ordering::SeqCst);
+        self.send(self.flavor().ptt(true)).await
+    }
+
+    /// Keyed up, but the radio still hasn't asked for audio after
+    /// NO_CHRONO_TIMEOUT: unkey rather than sit on a dead carrier.
+    async fn check_no_chrono(&self, keyed_at: Instant) -> anyhow::Result<()> {
+        if self.chrono_seen.load(Ordering::SeqCst) || keyed_at.elapsed() < NO_CHRONO_TIMEOUT {
+            return Ok(());
+        }
+        warn!("tx: radio never requested TX audio — unkeying");
+        *self.tx_state.lock().unwrap() = None;
+        let _ = self.send(self.flavor().ptt(false)).await;
+        anyhow::bail!(
+            "the radio keyed up but never asked Diddle for TX audio — check that the TCI audio stream is enabled"
+        )
     }
 
     /// True at most once per MODE_FIX_MIN_INTERVAL, recording the attempt.
@@ -602,6 +698,7 @@ impl TciClient {
 
     async fn run_loop(self: Arc<Self>, url: String, mut cmd_rx: mpsc::Receiver<String>) {
         self.set_state(TciState::Connecting).await;
+        *self.flavor.lock().unwrap() = TciFlavor::Rhr;
         info!(%url, "connecting to TCI");
 
         let (ws, _) = match connect_async(&url).await {
@@ -702,6 +799,7 @@ impl TciClient {
                                     if let Some(frame) = self.build_chrono_response(
                                         info.trx,
                                         info.sample_rate,
+                                        info.channels,
                                         requested,
                                     ) {
                                         if write
@@ -855,9 +953,27 @@ impl TciClient {
                 // Auto-start the RX audio stream — operator doesn't need a
                 // separate "Start audio" click. WavPlayer will stop this
                 // explicitly when it kicks off offline playback.
+                if self.flavor() == TciFlavor::Spec {
+                    // Pin the stream format our TX generator and RX decoder
+                    // assume. Mono, because in DIGL/DIGU a 2-channel stream
+                    // is I/Q, not left/right. (RHR is left as it was.)
+                    for c in [
+                        "audio_samplerate:48000;",
+                        "audio_stream_sample_type:float32;",
+                        "audio_stream_channels:1;",
+                    ] {
+                        let _ = self.send(c.to_string()).await;
+                    }
+                }
                 let _ = self.send("audio_start:0;".to_string()).await;
                 // Force DIGL so AFSK RTTY lands on the expected sideband.
                 self.force_rtty_mode().await;
+            }
+            "protocol" => {
+                let name = m.arg_str(0).unwrap_or("");
+                let flavor = TciFlavor::from_protocol(name);
+                info!(server = %name, version = ?m.arg_str(1), ?flavor, "TCI protocol");
+                *self.flavor.lock().unwrap() = flavor;
             }
             "vfo" if m.arg_u8(0) == Some(0) && m.arg_u8(1) == Some(0) => {
                 if let Some(hz) = m.arg_u64(2) {
@@ -908,4 +1024,35 @@ fn decode_stereo_f32_to_mono(bytes: &[u8], channels: u32) -> Vec<f32> {
         out.push(sum / ch as f32);
     }
     out
+}
+
+#[cfg(test)]
+mod flavor_tests {
+    use super::*;
+
+    #[test]
+    fn expertsdr_gets_spec_ptt_and_rhr_is_unchanged() {
+        let e = TciFlavor::from_protocol("ExpertSDR3");
+        assert_eq!(e, TciFlavor::Spec);
+        assert_eq!(e.ptt(true), "trx:0,true,tci;");
+        assert_eq!(e.ptt(false), "trx:0,false;");
+        assert_eq!(TciFlavor::from_protocol("ExpertSDR2"), TciFlavor::Spec);
+        let r = TciFlavor::from_protocol("RHR");
+        assert_eq!(r, TciFlavor::Rhr);
+        assert_eq!(r.ptt(true), "trx:0,true,vac;");
+        assert_eq!(r.ptt(false), "trx:0,false,vac;");
+        assert_eq!(TciFlavor::from_protocol(""), TciFlavor::Rhr);
+    }
+
+    #[test]
+    fn tx_frame_header_carries_format_and_channels() {
+        let f = build_tx_audio_frame(0, 48_000, TX_FORMAT_F32_SPEC, 1, &[0.5, -0.5]);
+        let u = |o: usize| u32::from_le_bytes([f[o], f[o + 1], f[o + 2], f[o + 3]]);
+        assert_eq!(u(4), 48_000);
+        assert_eq!(u(8), 3); // float32 per spec
+        assert_eq!(u(20), 2); // length = values
+        assert_eq!(u(24), TX_STREAM_TYPE);
+        assert_eq!(u(28), 1); // channels
+        assert_eq!(f.len(), AUDIO_HEADER_BYTES + 8);
+    }
 }
