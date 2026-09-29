@@ -5,6 +5,8 @@ All notable changes to Diddle are documented here. Format loosely follows
 
 ## [Unreleased]
 
+## [0.1.24] — 2026-09-29
+
 ### Changed
 - **Ad-hoc send keys up the moment the window opens** (Word and Char modes), diddling until you type — the other station hears you straight away instead of after your first character or word. Line mode still waits for Enter. `Esc` before you've sent anything aborts *and* closes the window, so an accidental `Alt+K` is one keystroke to undo.
 
