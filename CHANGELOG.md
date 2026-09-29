@@ -5,6 +5,11 @@ All notable changes to Diddle are documented here. Format loosely follows
 
 ## [Unreleased]
 
+## [0.1.26] — 2026-09-29
+
+### Added
+- **The TCI server address is remembered.** Once Diddle connects, the address is saved and filled in on the next launch, so a radio on a non-default port (for example `ws://127.0.0.1:50005`) no longer has to be retyped every time. An address that fails to connect is never saved over a working one.
+
 ## [0.1.25] — 2026-09-29
 
 ### Fixed

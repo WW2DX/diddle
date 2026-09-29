@@ -17,10 +17,17 @@
   import { rfFromAudio } from "$lib/freq";
   import { rttyConfig } from "$lib/rttyConfig.svelte";
   import { qsoLog } from "$lib/qsoLog.svelte";
+  import { settings } from "$lib/settings.svelte";
 
   let { rig = $bindable() }: { rig: RigState } = $props();
 
   let url = $state(DEFAULT_TCI_URL);
+  // Start from the last address that connected (e.g. a non-default port),
+  // once saved settings have loaded — unless the operator already typed.
+  let urlTouched = false;
+  $effect(() => {
+    if (settings.loaded && !urlTouched) url = settings.tciUrl;
+  });
   let tci = $state<TciState>({ kind: "disconnected" });
   let error = $state<string | null>(null);
   let now = $state(Date.now());
@@ -42,7 +49,12 @@
       tci = s;
       rig = r;
     } catch {}
-    unlisten.push(await onState((s) => (tci = s)));
+    unlisten.push(
+      await onState((s) => {
+        tci = s;
+        if (s.kind === "connected") settings.setTciUrl(s.url);
+      }),
+    );
     unlisten.push(await onRig((r) => (rig = r)));
     try {
       simOn = (await simStatus()).running;
@@ -118,6 +130,7 @@
     <input
       type="text"
       bind:value={url}
+      oninput={() => (urlTouched = true)}
       disabled={connected || tci.kind === "connecting"}
       spellcheck="false"
     />

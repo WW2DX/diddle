@@ -1,3 +1,4 @@
+import { DEFAULT_TCI_URL } from "$lib/tci";
 // Operator settings store, persisted to localStorage. Holds station-identity
 // info that contests need (call, name, state, zone, grid) plus the active
 // contest profile id.
@@ -21,6 +22,7 @@ interface Stored {
   bandmapAllBands?: boolean; // false = current band only
   bandmapSide?: boolean; // true = docked column beside the operating panels
   historyPath?: string; // N1MM-style call history file
+  tciUrl?: string; // last TCI server address that connected
 }
 
 // Bounds for how many decoded lines the RX window keeps before old lines
@@ -46,6 +48,7 @@ class Settings {
   bandmapAllBands = $state<boolean>(false);
   bandmapSide = $state<boolean>(true);
   historyPath = $state<string>("");
+  tciUrl = $state<string>(DEFAULT_TCI_URL);
   loaded = $state(false);
 
   load() {
@@ -71,6 +74,7 @@ class Settings {
         if (obj.bandmapAllBands !== undefined) this.bandmapAllBands = obj.bandmapAllBands;
         if (obj.bandmapSide !== undefined) this.bandmapSide = obj.bandmapSide;
         this.historyPath = obj.historyPath || "";
+        if (obj.tciUrl) this.tciUrl = obj.tciUrl;
       }
     } catch (e) {
       console.error("settings.load failed", e);
@@ -99,6 +103,7 @@ class Settings {
           bandmapAllBands: this.bandmapAllBands,
           bandmapSide: this.bandmapSide,
           historyPath: this.historyPath,
+          tciUrl: this.tciUrl,
         } satisfies Stored),
       );
     } catch (e) {
@@ -193,6 +198,14 @@ class Settings {
   }
   toggleBandmapSide() {
     this.bandmapSide = !this.bandmapSide;
+    this.save();
+  }
+  /// Remember the TCI server address — called once it has connected, so a
+  /// mistyped address never replaces a working one.
+  setTciUrl(v: string) {
+    const u = v.trim();
+    if (!u || u === this.tciUrl) return;
+    this.tciUrl = u;
     this.save();
   }
   setHistoryPath(v: string) {
