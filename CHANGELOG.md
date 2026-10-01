@@ -5,6 +5,8 @@ All notable changes to Diddle are documented here. Format loosely follows
 
 ## [Unreleased]
 
+## [0.1.27] — 2026-10-01
+
 ### Added
 - **Multipliers and score.** Diddle now ships AD1C's country file (`cty.dat`) and knows every call's country, CQ/ITU zone and continent; update it from country-files.com or load your own `cty.dat` / `WL_CTY.DAT` in Settings.
   - **New-multiplier highlighting:** calls that would be a new mult on their band show purple in the RX window, on the waterfall, in the bandmap and in the Call field, with a `NEW: Zone 14 · Ukraine` tag as you enter them. Logging one flashes `NEW MULT` and plays a chime (Settings can turn the chime off).
