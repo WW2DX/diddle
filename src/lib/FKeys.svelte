@@ -1,7 +1,7 @@
 <script lang="ts">
   import { onMount } from "svelte";
   import { settings } from "$lib/settings.svelte";
-  import { macroState } from "$lib/macros.svelte";
+  import { macroState, keyLabel } from "$lib/macros.svelte";
   import { entryBus } from "$lib/entry.svelte";
 
   onMount(() => settings.load());
@@ -15,7 +15,8 @@
     }
     if (!/^F[1-8]$/.test(e.key)) return;
     e.preventDefault();
-    fireKey(e.key);
+    // Shift+F1..F8 are the second bank of eight.
+    fireKey(e.shiftKey ? `S${e.key}` : e.key);
   }
 
   // F3 is the TU slot (ESM sends it too): once it's gone out, let the entry
@@ -63,9 +64,8 @@
       <button
         onclick={() => fireKey(m.key)}
         title={macroState.expand(m.text)}
-        disabled={macroState.txing}
       >
-        <span class="key">{m.key}</span>
+        <span class="key">{keyLabel(m.key)}</span>
         <span class="lbl">{m.label}</span>
       </button>
     {/each}

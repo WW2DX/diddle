@@ -317,8 +317,21 @@
   // position instead of by which element got it: pick the spot (in the same
   // row) whose center is nearest the click.
   function pickSpotFromClick(e: MouseEvent, source: "decoder" | "cluster") {
+    const best = spotAtClick(e, source);
+    if (best) pickSpot(best.call, best.abs_hz);
+  }
+
+  // Right-click a tag: queue the station as a NEXT caller — no QSY (in Run
+  // he's calling you on your frequency).
+  function queueSpotFromClick(e: MouseEvent, source: "decoder" | "cluster") {
+    e.preventDefault();
+    const best = spotAtClick(e, source);
+    if (best) entryBus.queueNext(best.call);
+  }
+
+  function spotAtClick(e: MouseEvent, source: "decoder" | "cluster"): Overlay | null {
     const wrap = (e.currentTarget as HTMLElement).parentElement;
-    if (!wrap) return;
+    if (!wrap) return null;
     const rect = wrap.getBoundingClientRect();
     const frac = Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width));
     const clickHz = frac * viewSpanHz;
@@ -329,7 +342,7 @@
         best = o;
       }
     }
-    if (best) pickSpot(best.call, best.abs_hz);
+    return best;
   }
 
   // QSY to a clicked spot: retune the radio so the signal lands at the
@@ -597,6 +610,10 @@
   // fast spin doesn't lose steps waiting for the rig to echo each VFO change.
   const DIAL_STEP_HZ = 10;
   const DIAL_COARSE_HZ = 100;
+  const DIAL_BIG_HZ = 1000; // Alt (Option) + wheel/arrows, or PgUp/PgDn
+  function dialStep(e: { shiftKey: boolean; altKey: boolean }): number {
+    return e.altKey ? DIAL_BIG_HZ : e.shiftKey ? DIAL_COARSE_HZ : DIAL_STEP_HZ;
+  }
   const WHEEL_PX_PER_STEP = 40; // trackpads send many small deltas
   let canvasWrap: HTMLDivElement;
   let dialTarget = 0;
@@ -632,17 +649,23 @@
     if (steps === 0) return;
     wheelAccum -= steps * WHEEL_PX_PER_STEP;
     // Wheel up = dial up, like the radio's knob.
-    nudgeDial(-steps * (e.shiftKey ? DIAL_COARSE_HZ : DIAL_STEP_HZ));
+    nudgeDial(-steps * dialStep(e));
   }
 
   function onWaterfallKey(e: KeyboardEvent) {
+    if (e.ctrlKey || e.metaKey) return;
+    if (e.key === "PageUp" || e.key === "PageDown") {
+      // Like the radio's 1 kHz step: Page Up = dial up.
+      e.preventDefault();
+      nudgeDial(e.key === "PageUp" ? DIAL_BIG_HZ : -DIAL_BIG_HZ);
+      return;
+    }
     if (e.key !== "ArrowLeft" && e.key !== "ArrowRight") return;
-    if (e.ctrlKey || e.altKey || e.metaKey) return;
     e.preventDefault();
     // ←/→ slide the signals left/right on screen. In DIGL a signal's audio
     // tone rises with the dial, so "right" is dial up; in USB it's down.
     const right = e.key === "ArrowRight" ? 1 : -1;
-    const step = e.shiftKey ? DIAL_COARSE_HZ : DIAL_STEP_HZ;
+    const step = dialStep(e);
     nudgeDial(right * step * (isLowerSideband(rig.mode) ? 1 : -1));
   }
 
@@ -799,7 +822,7 @@
     bind:this={canvasWrap}
     tabindex="0"
     onkeydown={onWaterfallKey}
-    title="Wheel or ←/→ tunes the radio ({DIAL_STEP_HZ} Hz; Shift = {DIAL_COARSE_HZ} Hz)"
+    title="Wheel or ←/→ tunes the radio ({DIAL_STEP_HZ} Hz; Shift = {DIAL_COARSE_HZ} Hz; Alt/Option = 1 kHz; PgUp/PgDn = ±1 kHz)"
   >
     <canvas
       bind:this={canvas}
@@ -827,7 +850,8 @@
           class:worked={o.worked}
           style="left: {pct}%"
           onclick={(e) => pickSpotFromClick(e, o.source)}
-          title={`${o.worked ? "DUPE — already worked on this band · " : ""}Click → load ${o.call} + QSY · ${o.source === "cluster" ? "cluster" : "decoded"} · ${o.audio_hz.toFixed(0)} Hz · ${new Date(o.timestamp_ms).toLocaleTimeString()}${o.comment ? " · " + o.comment : ""}`}
+          oncontextmenu={(e) => queueSpotFromClick(e, o.source)}
+          title={`${o.worked ? "DUPE — already worked on this band · " : ""}Click → load ${o.call} + QSY · right-click → queue as NEXT · ${o.source === "cluster" ? "cluster" : "decoded"} · ${o.audio_hz.toFixed(0)} Hz · ${new Date(o.timestamp_ms).toLocaleTimeString()}${o.comment ? " · " + o.comment : ""}`}
         >
           {o.call}
         </button>

@@ -40,6 +40,24 @@
   // it goes back below the F-keys, as before.
   const DOCK_MIN_WIDTH = 1100;
   let viewportW = $state(typeof window === "undefined" ? 0 : window.innerWidth);
+  // Drag the bandmap column's left edge to resize it (saved on release).
+  function startResize(e: PointerEvent) {
+    e.preventDefault();
+    const handle = e.currentTarget as HTMLElement;
+    handle.setPointerCapture(e.pointerId);
+    const startX = e.clientX;
+    const startW = settings.bandmapWidth;
+    const move = (ev: PointerEvent) =>
+      settings.setBandmapWidth(startW + (startX - ev.clientX) / zoom, false);
+    const up = (ev: PointerEvent) => {
+      handle.removeEventListener("pointermove", move);
+      handle.removeEventListener("pointerup", up);
+      settings.setBandmapWidth(startW + (startX - ev.clientX) / zoom, true);
+    };
+    handle.addEventListener("pointermove", move);
+    handle.addEventListener("pointerup", up);
+  }
+
   let docked = $derived(settings.bandmapSide && viewportW / zoom >= DOCK_MIN_WIDTH);
 
   function setZoom(z: number) {
@@ -111,7 +129,7 @@
 
 <Header bind:rig />
 
-<main class:docked>
+<main class:docked style="--bm-w: {settings.bandmapWidth}px">
   <div class="ops">
     <Waterfall />
     <DecoderView {rig} />
@@ -132,6 +150,12 @@
   </div>
   {#if docked}
     <aside class="bandmap-col">
+      <!-- svelte-ignore a11y_no_static_element_interactions -->
+      <div
+        class="bm-resize"
+        title="Drag to resize the bandmap"
+        onpointerdown={startResize}
+      ></div>
       <BandmapPanel {rig} docked />
     </aside>
   {/if}
@@ -170,11 +194,21 @@
   main.docked {
     max-width: 1880px;
     display: grid;
-    grid-template-columns: minmax(0, 1fr) 440px;
+    grid-template-columns: minmax(0, 1fr) var(--bm-w, 440px);
     gap: 12px;
     align-items: start;
   }
   .ops { min-width: 0; }
+  .bm-resize {
+    position: absolute;
+    left: -9px;
+    top: 0;
+    bottom: 0;
+    width: 8px;
+    cursor: col-resize;
+    border-radius: 3px;
+  }
+  .bm-resize:hover { background: rgba(74, 144, 226, 0.35); }
   .bandmap-col {
     position: sticky;
     top: 12px;

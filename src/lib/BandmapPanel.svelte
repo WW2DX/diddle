@@ -235,7 +235,7 @@
   }
 </script>
 
-<section class="panel" class:docked>
+<section class="panel" class:docked style={settings.fontStyle("bandmap")}>
   <header>
     <h2>
       Bandmap <span class="dim">· {allBands ? "all bands" : currentBand}</span>
@@ -440,8 +440,9 @@
     color: #c5d1de;
     padding: 5px 10px;
     cursor: pointer;
-    font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
-    font-size: 12px;
+    font-family: var(--win-font, ui-monospace, SFMono-Regular, Menlo, monospace);
+    font-size: var(--win-size, 12px);
+    font-variant-numeric: var(--win-zero, normal);
     text-align: left;
     border-bottom: 1px solid #161a1d;
   }

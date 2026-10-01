@@ -1436,8 +1436,17 @@ impl Simulator {
             }
             return Ok(());
         }
-        if self.tx_busy.swap(true, Ordering::SeqCst) {
-            anyhow::bail!("TX already in progress");
+        // Chained F-keys: wait for the current transmission (joining a live
+        // keyboard send if one is running) instead of refusing.
+        let deadline = Instant::now() + Duration::from_secs(60);
+        while self.tx_busy.swap(true, Ordering::SeqCst) {
+            if self.live_push(&text) {
+                return Ok(());
+            }
+            if Instant::now() > deadline {
+                anyhow::bail!("TX still busy after 60 s");
+            }
+            tokio::time::sleep(Duration::from_millis(20)).await;
         }
         self.tx_cancel.store(false, Ordering::SeqCst);
         let result = self.transmit_inner(&text).await;
@@ -1587,7 +1596,7 @@ impl Simulator {
 
     pub fn live_push(&self, text: &str) -> bool {
         match self.live.lock().unwrap().as_mut() {
-            Some(live) if !live.is_finishing() => {
+            Some(live) if live.accepts_text() => {
                 live.push(text);
                 true
             }

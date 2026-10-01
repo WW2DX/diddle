@@ -24,6 +24,33 @@ class EntryBus {
     this.token++;
   }
 
+  /// NEXT queue (N1MM/WriteLog style): right-click callers while working
+  /// one; the first goes straight into Call if it's empty, the rest wait
+  /// here in the order clicked. ESM's TU step sends TU, logs, loads the
+  /// next one and sends it the exchange — one Enter per QSO.
+  nextQueue = $state<string[]>([]);
+
+  queueNext(c: string) {
+    const call = c.trim().toUpperCase();
+    if (!call) return;
+    if (!this.currentCall.trim()) {
+      this.setCall(call);
+      return;
+    }
+    if (call === this.currentCall.trim().toUpperCase() || this.nextQueue.includes(call)) return;
+    this.nextQueue = [...this.nextQueue, call];
+  }
+
+  popNext(): string | undefined {
+    const [first, ...rest] = this.nextQueue;
+    this.nextQueue = rest;
+    return first;
+  }
+
+  dropNext(c: string) {
+    this.nextQueue = this.nextQueue.filter((x) => x !== c);
+  }
+
   /// The TU macro (F3) was sent by hand — EntryWindow logs the QSO in Run
   /// mode with ESM on, like the ESM Enter step does.
   tuToken = $state<number>(0);

@@ -138,7 +138,7 @@
   }
 </script>
 
-<section class="panel">
+<section class="panel" style={settings.fontStyle("log")}>
   <header class="head">
     <h2>Log <span class="count">({qsoLog.qsos.length})</span></h2>
     <div class="tools">
@@ -343,7 +343,8 @@
   table {
     width: 100%;
     border-collapse: collapse;
-    font-size: 12px;
+    font-size: var(--win-size, 12px);
+    font-variant-numeric: var(--win-zero, normal);
   }
 
   thead th {
@@ -370,10 +371,10 @@
   tr:last-child td { border-bottom: none; }
   tr:hover td { background: #1c2024; }
 
-  .mono { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
+  .mono { font-family: var(--win-font, ui-monospace, SFMono-Regular, Menlo, monospace); }
   .dim { color: #6b7176; }
-  .call { font-weight: 600; color: #e6e6e6; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
-  .band { color: #fbbf24; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
+  .call { font-weight: 600; color: #e6e6e6; font-family: var(--win-font, ui-monospace, SFMono-Regular, Menlo, monospace); }
+  .band { color: #fbbf24; font-family: var(--win-font, ui-monospace, SFMono-Regular, Menlo, monospace); }
 
   .actions { text-align: right; width: 30px; }
 

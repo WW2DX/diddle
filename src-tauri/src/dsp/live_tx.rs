@@ -38,9 +38,14 @@ pub struct LiveTx {
 
 impl LiveTx {
     pub fn new(sample_rate: u32, mark_hz: f32, space_hz: f32, baud: f32) -> Self {
+        Self::with_lead(sample_rate, mark_hz, space_hz, baud, LEAD_MS)
+    }
+
+    /// Like `new`, with `lead_ms` of plain mark before anything else.
+    pub fn with_lead(sample_rate: u32, mark_hz: f32, space_hz: f32, baud: f32, lead_ms: u32) -> Self {
         Self {
             gen: RttyTxGenerator::new(sample_rate, mark_hz, space_hz, baud),
-            lead_left: (sample_rate * LEAD_MS / 1000) as usize,
+            lead_left: (sample_rate as u64 * lead_ms as u64 / 1000) as usize,
             trail_left: (sample_rate * TRAIL_MS / 1000) as usize,
             finishing: false,
             trailing: false,
@@ -51,9 +56,16 @@ impl LiveTx {
         }
     }
 
-    /// Queue typed text. Ignored once finishing (Enter already pressed).
+    /// Text can still join this transmission: anything up to the moment
+    /// the closing mark begins. (After Enter, more text — a chained F-key —
+    /// still goes out before the unkey.)
+    pub fn accepts_text(&self) -> bool {
+        !self.trailing && !self.done
+    }
+
+    /// Queue text. Ignored once the closing mark has begun.
     pub fn push(&mut self, text: &str) {
-        if self.finishing || text.is_empty() {
+        if !self.accepts_text() || text.is_empty() {
             return;
         }
         self.echo.extend(self.gen.enqueue_with_marks(text));
@@ -198,15 +210,35 @@ mod tests {
         assert_eq!(echoed, "K6AC");
     }
 
+    /// A second message pushed after finish (a chained F-key) still goes
+    /// out in the same transmission, back to back.
+    #[test]
+    fn text_pushed_after_finish_is_chained() {
+        let mut tx = LiveTx::with_lead(SR, 2125.0, 2295.0, 45.45, 500);
+        let mut wave = Vec::new();
+        tx.push("TU ");
+        tx.finish();
+        tx.generate(SR as usize / 2, &mut wave);
+        assert!(tx.accepts_text());
+        tx.push("K6AC 599 05 ");
+        let mut guard = 0;
+        while !tx.is_done() && guard < 400 {
+            tx.generate(4800, &mut wave);
+            guard += 1;
+        }
+        let got = decode(&wave);
+        assert!(got.contains("TU K6AC 599 05"), "decoded {got:?}");
+    }
+
     #[test]
     fn finish_with_nothing_typed_ends() {
         let mut tx = LiveTx::new(SR, 2125.0, 2295.0, 45.45);
         let mut wave = Vec::new();
         tx.generate(SR as usize / 2, &mut wave);
         tx.finish();
-        tx.push("IGNORED");
         tx.generate(SR as usize, &mut wave);
         assert!(tx.is_done());
+        tx.push("IGNORED");
         assert_eq!(tx.sent_text(), "");
     }
 }

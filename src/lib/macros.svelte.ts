@@ -2,7 +2,8 @@
 // Enter-handler in EntryWindow read macros from here and call `fire()`.
 //
 // Macros are user-editable from the Settings panel and persisted to
-// localStorage. Slot keys (F1..F8) are fixed; label and text are editable.
+// localStorage. Slot keys are fixed — F1..F8 plus Shift+F1..F8 ("SF1"..
+// "SF8") — while label and text are editable.
 
 import { transmit, txAbort, txLiveStart, txLivePush, txLiveFinish } from "$lib/tci";
 import { settings } from "$lib/settings.svelte";
@@ -24,7 +25,21 @@ const DEFAULT_MACROS: Macro[] = [
   { key: "F6", label: "?",    text: "PSE AGN ?" },
   { key: "F7", label: "BRK",  text: "BRK BRK <MYCALL>" },
   { key: "F8", label: "73",   text: "73 DE <MYCALL>" },
+  // Shift+F1..F8.
+  { key: "SF1", label: "QRZ",   text: "QRZ? DE <MYCALL>" },
+  { key: "SF2", label: "AGN",   text: "AGN AGN" },
+  { key: "SF3", label: "Call?", text: "CALL? CALL?" },
+  { key: "SF4", label: "Nr?",   text: "NR? NR?" },
+  { key: "SF5", label: "Exch?", text: "EXCH? EXCH?" },
+  { key: "SF6", label: "QSL",   text: "QSL TU" },
+  { key: "SF7", label: "QRL?",  text: "QRL? DE <MYCALL>" },
+  { key: "SF8", label: "Test",  text: "<MYCALL> TEST" },
 ];
+
+/// How a slot key is shown: "SF3" → "⇧F3".
+export function keyLabel(key: string): string {
+  return key.startsWith("SF") ? `⇧${key.slice(1)}` : key;
+}
 
 const STORE_KEY = "diddle.macros";
 
@@ -34,7 +49,12 @@ function clone(ms: Macro[]): Macro[] {
 
 class MacroState {
   macros = $state<Macro[]>(clone(DEFAULT_MACROS));
-  txing = $state(false);
+  // Macros handed to the radio and not yet finished. Several can be in
+  // flight: F-keys pressed while one is playing chain onto it.
+  private pending = $state(0);
+  get txing(): boolean {
+    return this.pending > 0;
+  }
   /// A live keyboard send (ad-hoc window) is on the air.
   live = $state(false);
   // Pushes and the finish must reach the backend in order.
@@ -134,13 +154,16 @@ class MacroState {
   /// expansion as macros and drives the shared txing/lastSent/lastError
   /// state so the TX indicator and ESC-abort behave identically.
   /// Resolves true once the text went out (or joined a live send).
+  ///
+  /// Never refused for being busy: text sent while we're on the air chains
+  /// onto that transmission (the backend queues it). Tokens are expanded
+  /// now, synchronously, so callers can change the entry form right after.
   async send(text: string, ctx: { call?: string } = {}): Promise<boolean> {
-    if (this.txing) return false;
     const expanded = this.expand(text, ctx);
     if (expanded.trim().length === 0) return false;
     this.lastError = null;
     this.lastSent = expanded;
-    this.txing = true;
+    this.pending++;
     try {
       await transmit(expanded);
       return true;
@@ -149,7 +172,7 @@ class MacroState {
       console.error("send failed", e);
       return false;
     } finally {
-      this.txing = false;
+      this.pending--;
     }
   }
 
@@ -157,7 +180,6 @@ class MacroState {
   /// F-keys so renaming labels doesn't break ESM/Enter behavior.
   /// Resolves true once the macro went out.
   async fire(key: string, ctx: { call?: string } = {}): Promise<boolean> {
-    if (this.txing) return false;
     const m = this.macros.find((x) => x.key === key || x.label === key);
     if (!m) return false;
     if (this.expand(m.text, ctx).trim().length === 0) {

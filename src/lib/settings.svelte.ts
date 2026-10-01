@@ -23,7 +23,27 @@ interface Stored {
   bandmapSide?: boolean; // true = docked column beside the operating panels
   historyPath?: string; // N1MM-style call history file
   tciUrl?: string; // last TCI server address that connected
+  fonts?: Partial<Record<FontWin, WinFont>>;
+  bandmapWidth?: number;
 }
+
+/// Windows whose text font the operator can pick.
+export type FontWin = "decoder" | "entry" | "bandmap" | "log";
+export const FONT_WINS: { id: FontWin; label: string; defaultSize: number }[] = [
+  { id: "decoder", label: "RX decoder", defaultSize: 14 },
+  { id: "entry", label: "Entry", defaultSize: 18 },
+  { id: "bandmap", label: "Bandmap", defaultSize: 12 },
+  { id: "log", label: "Log", defaultSize: 12 },
+];
+/// family "" and size 0 mean the window's built-in default.
+export interface WinFont {
+  family: string;
+  size: number;
+  slashedZero: boolean;
+}
+const NO_FONT: WinFont = { family: "", size: 0, slashedZero: false };
+export const BANDMAP_WIDTH_MIN = 300;
+export const BANDMAP_WIDTH_MAX = 900;
 
 // Bounds for how many decoded lines the RX window keeps before old lines
 // scroll off for good.
@@ -49,6 +69,13 @@ class Settings {
   bandmapSide = $state<boolean>(true);
   historyPath = $state<string>("");
   tciUrl = $state<string>(DEFAULT_TCI_URL);
+  fonts = $state<Record<FontWin, WinFont>>({
+    decoder: { ...NO_FONT },
+    entry: { ...NO_FONT },
+    bandmap: { ...NO_FONT },
+    log: { ...NO_FONT },
+  });
+  bandmapWidth = $state<number>(440);
   loaded = $state(false);
 
   load() {
@@ -75,6 +102,13 @@ class Settings {
         if (obj.bandmapSide !== undefined) this.bandmapSide = obj.bandmapSide;
         this.historyPath = obj.historyPath || "";
         if (obj.tciUrl) this.tciUrl = obj.tciUrl;
+        if (obj.fonts) {
+          for (const w of FONT_WINS) {
+            const f = obj.fonts[w.id];
+            if (f) this.fonts[w.id] = { ...NO_FONT, ...f };
+          }
+        }
+        if (obj.bandmapWidth) this.bandmapWidth = this.clampWidth(obj.bandmapWidth);
       }
     } catch (e) {
       console.error("settings.load failed", e);
@@ -104,6 +138,8 @@ class Settings {
           bandmapSide: this.bandmapSide,
           historyPath: this.historyPath,
           tciUrl: this.tciUrl,
+          fonts: this.fonts,
+          bandmapWidth: this.bandmapWidth,
         } satisfies Stored),
       );
     } catch (e) {
@@ -200,6 +236,35 @@ class Settings {
     this.bandmapSide = !this.bandmapSide;
     this.save();
   }
+  setFont(win: FontWin, patch: Partial<WinFont>) {
+    this.fonts[win] = { ...this.fonts[win], ...patch };
+    this.save();
+  }
+
+  /// CSS custom properties for a window's text: --win-font, --win-size and
+  /// --win-zero, consumed with var(…, built-in default) in its styles.
+  fontStyle(win: FontWin): string {
+    const f = this.fonts[win];
+    const parts: string[] = [];
+    if (f.family.trim()) {
+      const fam = f.family.trim().replace(/["\\;{}]/g, "");
+      parts.push(`--win-font: "${fam}", ui-monospace, Menlo, monospace`);
+    }
+    if (f.size > 0) parts.push(`--win-size: ${f.size}px`);
+    if (f.slashedZero) parts.push("--win-zero: slashed-zero");
+    return parts.join("; ");
+  }
+
+  private clampWidth(w: number): number {
+    return Math.round(Math.min(BANDMAP_WIDTH_MAX, Math.max(BANDMAP_WIDTH_MIN, w)));
+  }
+
+  /// Docked bandmap column width; `persist` false while dragging.
+  setBandmapWidth(w: number, persist = true) {
+    this.bandmapWidth = this.clampWidth(w);
+    if (persist) this.save();
+  }
+
   /// Remember the TCI server address — called once it has connected, so a
   /// mistyped address never replaces a working one.
   setTciUrl(v: string) {

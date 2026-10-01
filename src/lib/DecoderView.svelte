@@ -391,7 +391,7 @@
   }
 </script>
 
-<section class="panel">
+<section class="panel" style={settings.fontStyle("decoder")}>
   <header>
     <h2>RX decoder</h2>
     <div class="tones">
@@ -487,7 +487,7 @@
     <div class="rx-wrap">
       <!-- svelte-ignore a11y_click_events_have_key_events, a11y_no_static_element_interactions -->
       <div class="rx-text" bind:this={scrollEl} onscroll={onScroll} onclick={onTextClick}
-        >{#each segments as seg}{#if seg.call}<button class="call-chip" class:tx={seg.tx} class:dupe={workedHere.has(seg.call!)} title={workedHere.has(seg.call!) ? `${seg.call} — already worked on ${band}` : `Load ${seg.call} into the entry form`} onclick={() => pickCall(seg.call!)}>{seg.s}</button>{:else}<span class:tx={seg.tx}>{seg.s}</span>{/if}{/each}{#if pendingLine}<span class="pending">{pendingLine}</span>{/if}{#if segments.length === 0 && !pendingLine}{" "}{/if}</div
+        >{#each segments as seg}{#if seg.call}<button class="call-chip" class:tx={seg.tx} class:dupe={workedHere.has(seg.call!)} title={workedHere.has(seg.call!) ? `${seg.call} — already worked on ${band}` : `Click: load ${seg.call} · right-click: queue as NEXT caller`} onclick={() => pickCall(seg.call!)} oncontextmenu={(e) => { e.preventDefault(); entryBus.queueNext(seg.call!); }}>{seg.s}</button>{:else}<span class:tx={seg.tx}>{seg.s}</span>{/if}{/each}{#if pendingLine}<span class="pending">{pendingLine}</span>{/if}{#if segments.length === 0 && !pendingLine}{" "}{/if}</div
       >
       {#if !autoScroll}
         <button class="jump-btn" onclick={jumpToBottom} title="Jump to latest">
@@ -634,8 +634,9 @@
     resize: vertical;
     overflow-y: auto;
     padding: 8px 12px;
-    font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
-    font-size: 14px;
+    font-family: var(--win-font, ui-monospace, SFMono-Regular, Menlo, monospace);
+    font-size: var(--win-size, 14px);
+    font-variant-numeric: var(--win-zero, normal);
     color: #c5d1de;
     line-height: 1.5;
     white-space: pre-wrap;

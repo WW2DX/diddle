@@ -1,7 +1,7 @@
 <script lang="ts">
   import { onMount } from "svelte";
   import { open as openDialog } from "@tauri-apps/plugin-dialog";
-  import { settings } from "$lib/settings.svelte";
+  import { settings, FONT_WINS } from "$lib/settings.svelte";
   import { CONTESTS, activeContest } from "$lib/contests";
   import {
     scpAutoDownload,
@@ -14,7 +14,7 @@
     type CallHistoryStatus,
   } from "$lib/tci";
   import { cluster } from "$lib/cluster.svelte";
-  import { macroState } from "$lib/macros.svelte";
+  import { macroState, keyLabel } from "$lib/macros.svelte";
   import { contestSetups } from "$lib/contestSetups.svelte";
 
   // Show the format hint based on the current selection.
@@ -432,6 +432,55 @@
     </div>
   </div>
 
+  <div class="cluster">
+    <div class="cluster-info">
+      <span class="scp-label">Display fonts</span>
+      <span class="dim">per window · blank = built-in default</span>
+    </div>
+    <datalist id="font-suggestions">
+      {#each ["Menlo", "Monaco", "SF Mono", "Consolas", "Cascadia Mono", "Lucida Console", "Courier New", "DejaVu Sans Mono", "Andale Mono", "Arial", "Verdana", "Tahoma", "Segoe UI"] as f}
+        <option value={f}></option>
+      {/each}
+    </datalist>
+    <div class="font-rows">
+      {#each FONT_WINS as w}
+        {@const f = settings.fonts[w.id]}
+        <div class="font-row" style={settings.fontStyle(w.id)}>
+          <span class="font-win">{w.label}</span>
+          <input
+            class="font-family"
+            list="font-suggestions"
+            value={f.family}
+            placeholder="monospace (default)"
+            onchange={(e) => settings.setFont(w.id, { family: (e.target as HTMLInputElement).value })}
+          />
+          <input
+            class="font-size"
+            type="number"
+            min="8"
+            max="40"
+            value={f.size || ""}
+            placeholder={String(w.defaultSize)}
+            onchange={(e) => {
+              const v = parseInt((e.target as HTMLInputElement).value, 10);
+              settings.setFont(w.id, { size: v >= 8 && v <= 40 ? v : 0 });
+            }}
+          />
+          <span class="dim">px</span>
+          <label class="font-zero" title="Slashed zero (Ø-style 0), where the font supports it">
+            <input
+              type="checkbox"
+              checked={f.slashedZero}
+              onchange={(e) => settings.setFont(w.id, { slashedZero: (e.target as HTMLInputElement).checked })}
+            />
+            slashed 0
+          </label>
+          <span class="font-sample">K0ABC 599 05 NY</span>
+        </div>
+      {/each}
+    </div>
+  </div>
+
   <div class="macros">
     <div class="macros-head">
       <span class="scp-label">F-key macros</span>
@@ -447,7 +496,7 @@
     <div class="macro-rows">
       {#each macroState.macros as m, i (m.key)}
         <div class="macro-row">
-          <span class="macro-key">{m.key}</span>
+          <span class="macro-key">{keyLabel(m.key)}</span>
           <input
             class="macro-label"
             type="text"
@@ -676,6 +725,34 @@
     cursor: pointer;
   }
   .setup-row .del:hover { color: #f87171; border-color: #f87171; }
+
+  .font-rows { display: flex; flex-direction: column; gap: 6px; }
+  .font-row {
+    display: grid;
+    grid-template-columns: 90px minmax(140px, 220px) 64px auto auto 1fr;
+    align-items: center;
+    gap: 8px;
+    font-size: 12px;
+  }
+  .font-win { color: #c5d1de; }
+  .font-row input.font-family,
+  .font-row input.font-size {
+    background: #0c0e10;
+    border: 1px solid #2a2f33;
+    border-radius: 3px;
+    color: #e6e6e6;
+    padding: 3px 6px;
+    font-size: 12px;
+  }
+  .font-zero { display: flex; align-items: center; gap: 4px; color: #8a949d; white-space: nowrap; }
+  .font-sample {
+    font-family: var(--win-font, ui-monospace, SFMono-Regular, Menlo, monospace);
+    font-size: var(--win-size, 13px);
+    font-variant-numeric: var(--win-zero, normal);
+    color: #fbbf24;
+    white-space: nowrap;
+    overflow: hidden;
+  }
 
   .macros {
     margin-top: 14px;

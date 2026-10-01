@@ -141,7 +141,11 @@
   // S&P stops there, N1MM-style: the TU is the running station's to send,
   // and ours (F3) ends in CQ — which on his run frequency is the last
   // thing anybody wants.
-  async function esmEnter() {
+  // Every step updates the sequence state *before* its message goes out
+  // (fire() expands tokens synchronously), so a second Enter while the
+  // first is still on the air moves on instead of repeating it — F-keys
+  // now chain rather than being refused while transmitting.
+  function esmEnter() {
     const c = normalizeCall(call);
     const ex = exchRcvd.trim();
 
@@ -149,17 +153,17 @@
       if (c.length === 0) {
         // Search & Pounce, blind: answer his CQ with our call and stay in
         // the Call field to type his when he comes back.
-        await macroState.fire("F4"); // "DE <MYCALL>"
+        macroState.fire("F4"); // "DE <MYCALL>"
         callSent = true;
         queueMicrotask(() => callInput?.focus());
       } else if (!callSent || (needsExch && ex.length === 0)) {
         // Our call — and again on each Enter until he comes back to us.
-        await macroState.fire("F4", { call: c }); // "DE <MYCALL>"
+        macroState.fire("F4", { call: c }); // "DE <MYCALL>"
         callSent = true;
         sentCall = c;
         queueMicrotask(() => exchInput?.focus());
       } else {
-        await macroState.fire("F2", { call: c }); // our exchange
+        macroState.fire("F2", { call: c }); // our exchange
         exchSent = true;
         logQso();
       }
@@ -168,19 +172,29 @@
 
     // Run.
     if (c.length === 0) {
-      await macroState.fire("F1");
+      macroState.fire("F1");
     } else if (!exchSent || (needsExch && ex.length === 0)) {
       // Our exchange — and again on a bare Enter while we're still waiting
       // for his, which is how you ask for a repeat without an F-key.
-      await macroState.fire("F2", { call: c });
+      macroState.fire("F2", { call: c });
       exchSent = true;
       sentCall = c;
       queueMicrotask(() => exchInput?.focus());
     } else {
-      await macroState.fire("F3");
+      macroState.fire("F3", { call: c });
       logQso();
+      // NEXT: straight on to the next queued caller — his exchange chains
+      // onto the TU in the same transmission.
+      const next = entryBus.popNext();
+      if (next) {
+        loadCall(next);
+        macroState.fire("F2", { call: next });
+        exchSent = true;
+        sentCall = next;
+      }
     }
   }
+
 
   // The phase label shown next to the entry fields so the operator knows
   // what Enter will do.
@@ -202,7 +216,10 @@
     if (!hasCall) return { cls: "cq", label: "Run · ↵ CQ" };
     if (!exchSent || (needsExch && !hasExch))
       return { cls: "excg", label: "Run · ↵ Excg" };
-    return { cls: "tu", label: "Run · ↵ TU+Log" };
+    return {
+      cls: "tu",
+      label: entryBus.nextQueue.length ? "Run · ↵ TU+Log+Next" : "Run · ↵ TU+Log",
+    };
   });
 
   // Mirror the live Call field out to the shared bus so F-key macros (with no
@@ -220,7 +237,12 @@
     if (t === lastBusToken) return;
     lastBusToken = t;
     const c = normalizeCall(entryBus.requestedCall);
-    if (!c) return;
+    if (c) loadCall(c);
+  });
+
+  // Put a callsign in the Call field as a fresh station (clicked spot,
+  // NEXT queue) and get ready for his exchange.
+  function loadCall(c: string) {
     noteCallChanged(c);
     call = c;
     exchRcvd = "";
@@ -229,7 +251,7 @@
     suggestionIdx = -1;
     lookupHistory(c);
     queueMicrotask(() => exchInput?.focus());
-  });
+  }
 
   // An exchange word clicked in the decoder window. Builds the exchange a
   // piece at a time, N1MM-style: the first click replaces an empty or
@@ -495,7 +517,7 @@
   });
 </script>
 
-<section class="panel">
+<section class="panel" style={settings.fontStyle("entry")}>
   <header class="head">
     <h2>Entry</h2>
     <div class="ctx">
@@ -521,6 +543,14 @@
       {/if}
       {#if dupe}
         <span class="dupe-flag">DUPE</span>
+      {/if}
+      {#if entryBus.nextQueue.length}
+        <span class="next-q" title="Callers queued with right-click. ESM's TU step sends TU, logs, then loads the first one and sends him the exchange. Click a call to drop it.">
+          <span class="dim">next</span>
+          {#each entryBus.nextQueue as n}
+            <button type="button" class="next-chip" onclick={() => entryBus.dropNext(n)}>{n} ×</button>
+          {/each}
+        </span>
       {/if}
       {#if notice}
         <span class="del-pending">{notice}</span>
@@ -666,6 +696,19 @@
     white-space: nowrap;
   }
 
+  .next-q { display: inline-flex; align-items: center; gap: 4px; }
+  .next-chip {
+    background: #1c2a3a;
+    border: 1px solid #3a5a8a;
+    color: #92c5fa;
+    border-radius: 3px;
+    padding: 1px 6px;
+    font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+    font-size: 11px;
+    cursor: pointer;
+  }
+  .next-chip:hover { border-color: #f87171; color: #f87171; }
+
   .esm-chip {
     padding: 2px 8px;
     border-radius: 3px;
@@ -732,8 +775,9 @@
     border-radius: 3px;
     color: #e6e6e6;
     padding: 8px 10px;
-    font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
-    font-size: 18px;
+    font-family: var(--win-font, ui-monospace, SFMono-Regular, Menlo, monospace);
+    font-size: var(--win-size, 18px);
+    font-variant-numeric: var(--win-zero, normal);
     font-weight: 500;
   }
 
