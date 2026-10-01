@@ -7,6 +7,7 @@
   import { cluster } from "$lib/cluster.svelte";
   import { settings, HISTORY_MIN, HISTORY_MAX } from "$lib/settings.svelte";
   import { entryBus } from "$lib/entry.svelte";
+  import { scoreStore } from "$lib/score.svelte";
   import TuningScope from "$lib/TuningScope.svelte";
 
   let { rig }: { rig: RigState } = $props();
@@ -487,7 +488,7 @@
     <div class="rx-wrap">
       <!-- svelte-ignore a11y_click_events_have_key_events, a11y_no_static_element_interactions -->
       <div class="rx-text" bind:this={scrollEl} onscroll={onScroll} onclick={onTextClick}
-        >{#each segments as seg}{#if seg.call}<button class="call-chip" class:tx={seg.tx} class:dupe={workedHere.has(seg.call!)} title={workedHere.has(seg.call!) ? `${seg.call} — already worked on ${band}` : `Click: load ${seg.call} · right-click: queue as NEXT caller`} onclick={() => pickCall(seg.call!)} oncontextmenu={(e) => { e.preventDefault(); entryBus.queueNext(seg.call!); }}>{seg.s}</button>{:else}<span class:tx={seg.tx}>{seg.s}</span>{/if}{/each}{#if pendingLine}<span class="pending">{pendingLine}</span>{/if}{#if segments.length === 0 && !pendingLine}{" "}{/if}</div
+        >{#each segments as seg}{#if seg.call}<button class="call-chip" class:tx={seg.tx} class:dupe={workedHere.has(seg.call!)} class:newmult={!workedHere.has(seg.call!) && scoreStore.isNewMult(seg.call!, band)} title={workedHere.has(seg.call!) ? `${seg.call} — already worked on ${band}` : `Click: load ${seg.call} · right-click: queue as NEXT caller`} onclick={() => pickCall(seg.call!)} oncontextmenu={(e) => { e.preventDefault(); entryBus.queueNext(seg.call!); }}>{seg.s}</button>{:else}<span class:tx={seg.tx}>{seg.s}</span>{/if}{/each}{#if pendingLine}<span class="pending">{pendingLine}</span>{/if}{#if segments.length === 0 && !pendingLine}{" "}{/if}</div
       >
       {#if !autoScroll}
         <button class="jump-btn" onclick={jumpToBottom} title="Jump to latest">
@@ -698,6 +699,12 @@
     outline: none;
   }
   /* Worked on this band already. */
+  /* Would be a new multiplier on this band. */
+  .rx-text .call-chip.newmult {
+    color: #e9d5ff;
+    background: rgba(192, 132, 252, 0.28);
+    box-shadow: inset 0 -2px 0 #c084fc;
+  }
   .rx-text .call-chip.dupe {
     color: #f87171;
     background: rgba(248, 113, 113, 0.18);

@@ -16,6 +16,7 @@
   import { cluster } from "$lib/cluster.svelte";
   import { macroState, keyLabel } from "$lib/macros.svelte";
   import { contestSetups } from "$lib/contestSetups.svelte";
+  import { cty } from "$lib/ctyStore.svelte";
 
   // Show the format hint based on the current selection.
   let formatHint = $derived(activeContest().exchangeFormat);
@@ -50,6 +51,16 @@
     });
     if (!path || typeof path !== "string") return;
     await loadHistoryFromPath(path);
+  }
+
+  async function pickCtyFile() {
+    const path = await openDialog({
+      title: "Choose a country file (cty.dat or WL_CTY.DAT)",
+      multiple: false,
+      filters: [{ name: "Country file", extensions: ["dat", "DAT", "txt"] }],
+    });
+    if (!path || typeof path !== "string") return;
+    await cty.loadFile(path);
   }
 
   async function clearHistory() {
@@ -434,6 +445,39 @@
 
   <div class="cluster">
     <div class="cluster-info">
+      <span class="scp-label">Country file</span>
+      {#if cty.db}
+        <span class="scp-count">{cty.db.size} countries</span>
+        <span class="scp-source dim">{cty.source === "custom" ? "your copy (downloaded / loaded)" : "bundled cty.dat"}</span>
+      {:else}
+        <span class="dim">not loaded</span>
+      {/if}
+    </div>
+    <div class="scp-actions">
+      <button onclick={() => cty.download()} disabled={cty.busy}>
+        {cty.busy ? "Working…" : "Update from country-files.com"}
+      </button>
+      <button class="ghost" onclick={pickCtyFile} disabled={cty.busy}>Load cty.dat / WL_CTY.DAT…</button>
+      {#if cty.source === "custom"}
+        <button class="ghost" onclick={() => cty.reset()} disabled={cty.busy}>Use bundled</button>
+      {/if}
+      <span class="hint">Countries, CQ/ITU zones and continents — multipliers, points, zone prediction. AD1C, country-files.com.</span>
+    </div>
+    <label class="esm-toggle bell">
+      <input
+        type="checkbox"
+        checked={settings.multBell}
+        onchange={(e) => settings.setMultBell((e.target as HTMLInputElement).checked)}
+      />
+      Chime on a new multiplier
+    </label>
+    {#if cty.error}
+      <div class="scp-error">{cty.error}</div>
+    {/if}
+  </div>
+
+  <div class="cluster">
+    <div class="cluster-info">
       <span class="scp-label">Display fonts</span>
       <span class="dim">per window · blank = built-in default</span>
     </div>
@@ -726,6 +770,7 @@
   }
   .setup-row .del:hover { color: #f87171; border-color: #f87171; }
 
+  .bell { margin-top: 8px; }
   .font-rows { display: flex; flex-direction: column; gap: 6px; }
   .font-row {
     display: grid;

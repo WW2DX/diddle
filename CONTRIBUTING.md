@@ -15,6 +15,8 @@ See **[BUILD.md](BUILD.md)** for prerequisites and how to run `npm run tauri dev
 npm install
 npm run tauri dev      # run the app with hot reload
 npm run check          # type-check before pushing
+node --test test-node/ # unit tests: country file + contest scoring (Node 23+)
+(cd src-tauri && cargo test)  # Rust tests: decoder, TX engine, TCI
 ```
 
 ## Project conventions

@@ -5,6 +5,19 @@ All notable changes to Diddle are documented here. Format loosely follows
 
 ## [Unreleased]
 
+### Added
+- **Multipliers and score.** Diddle now ships AD1C's country file (`cty.dat`) and knows every call's country, CQ/ITU zone and continent; update it from country-files.com or load your own `cty.dat` / `WL_CTY.DAT` in Settings.
+  - **New-multiplier highlighting:** calls that would be a new mult on their band show purple in the RX window, on the waterfall, in the bandmap and in the Call field, with a `NEW: Zone 14 · Ukraine` tag as you enter them. Logging one flashes `NEW MULT` and plays a chime (Settings can turn the chime off).
+  - **Score panel:** QSOs, points and multipliers by band, totals and claimed score for CQ WW RTTY, ARRL RTTY Roundup, NAQP RTTY and CQ WPX RTTY.
+  - **Zone prediction:** in CQ WW, Exch is filled with the zone from the country file — call-history files don't carry zones — plus the history state when there is one. A DX station's exchange is there before he sends it.
+- **Contest-format exports.** Cabrillo `QSO:` lines follow each contest's columns (CQ WW: RST, zone, state/province or `DX`) with the computed `CLAIMED-SCORE`; ADIF puts each exchange part in its own field (`CQZ`, `STATE`/`VE_PROV`, `SRX`, `NAME`, `PFX`, `CONTEST_ID`…) for N1MM+ and WriteLog import.
+- **Chained F-keys.** F-keys pressed while one is on the air queue onto the same transmission instead of being refused.
+- **NEXT queue.** Right-click callers in the RX window or on the waterfall to queue them; the first goes straight into an empty Call. In Run, ESM's TU step sends TU, logs, loads the next caller and sends him the exchange — one Enter per QSO, in one transmission.
+- **Shift+F1–F8:** a second bank of eight macros (QRZ, AGN, CALL?, NR?, EXCH?, QSL, QRL?, TEST).
+- **1 kHz tuning steps** on the waterfall: Alt/Option + wheel or arrows, or PgUp/PgDn.
+- **Per-window fonts:** family, size and slashed zero for the RX decoder, Entry, Bandmap and Log windows (Settings → Display fonts).
+- **Resizable docked bandmap:** drag its left edge; the width is remembered.
+
 ## [0.1.26] — 2026-09-29
 
 ### Added

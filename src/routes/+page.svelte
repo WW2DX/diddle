@@ -12,6 +12,8 @@
   import SettingsPanel from "$lib/SettingsPanel.svelte";
   import TestPanel from "$lib/TestPanel.svelte";
   import BandmapPanel from "$lib/BandmapPanel.svelte";
+  import ScorePanel from "$lib/ScorePanel.svelte";
+  import { cty } from "$lib/ctyStore.svelte";
   import type { RigState } from "$lib/tci";
   import { qsoLog } from "$lib/qsoLog.svelte";
   import { spots } from "$lib/spots.svelte";
@@ -102,6 +104,7 @@
     macroState.load();
     contestSetups.load();
     qsoLog.load();
+    cty.load();
     spots.init();
     cluster.init();
 
@@ -138,6 +141,7 @@
     {#if !docked}
       <BandmapPanel {rig} />
     {/if}
+    <ScorePanel />
     <Logbook />
 
     <CollapsiblePanel title="Settings — operator + contest" open={false}>

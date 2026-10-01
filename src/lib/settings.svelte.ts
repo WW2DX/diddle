@@ -24,6 +24,7 @@ interface Stored {
   historyPath?: string; // N1MM-style call history file
   tciUrl?: string; // last TCI server address that connected
   fonts?: Partial<Record<FontWin, WinFont>>;
+  multBell?: boolean; // chime on a new multiplier
   bandmapWidth?: number;
 }
 
@@ -76,6 +77,7 @@ class Settings {
     log: { ...NO_FONT },
   });
   bandmapWidth = $state<number>(440);
+  multBell = $state<boolean>(true);
   loaded = $state(false);
 
   load() {
@@ -109,6 +111,7 @@ class Settings {
           }
         }
         if (obj.bandmapWidth) this.bandmapWidth = this.clampWidth(obj.bandmapWidth);
+        if (obj.multBell !== undefined) this.multBell = obj.multBell;
       }
     } catch (e) {
       console.error("settings.load failed", e);
@@ -140,6 +143,7 @@ class Settings {
           tciUrl: this.tciUrl,
           fonts: this.fonts,
           bandmapWidth: this.bandmapWidth,
+          multBell: this.multBell,
         } satisfies Stored),
       );
     } catch (e) {
@@ -236,6 +240,11 @@ class Settings {
     this.bandmapSide = !this.bandmapSide;
     this.save();
   }
+  setMultBell(v: boolean) {
+    this.multBell = v;
+    this.save();
+  }
+
   setFont(win: FontWin, patch: Partial<WinFont>) {
     this.fonts[win] = { ...this.fonts[win], ...patch };
     this.save();

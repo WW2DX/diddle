@@ -8,6 +8,7 @@
   import { rfFromAudio, dialForRf } from "$lib/freq";
   import { settings } from "$lib/settings.svelte";
   import { entryBus } from "$lib/entry.svelte";
+  import { scoreStore } from "$lib/score.svelte";
 
   // `docked`: rendered in the page's sticky side column — the panel then
   // fills the column's height and the row list takes all the spare room.
@@ -288,6 +289,7 @@
         <button
           class="row src-{r.source}"
           class:worked={r.worked}
+          class:newmult={!r.worked && scoreStore.isNewMult(r.call, r.band)}
           class:offband={allBands && r.band !== currentBand}
           onclick={() => qsyTo(r)}
           title={`Load ${r.call} + QSY to ${fmtMhz(r.freqHz)}${r.comment ? " · " + r.comment : ""}`}
@@ -457,6 +459,9 @@
   /* Dupe on this band — red + struck through, matching the entry field,
      decoder chips, and waterfall labels. */
   .row.worked .call { color: #f87171; text-decoration: line-through; }
+  /* Would be a new multiplier on its band. */
+  .row.newmult { background: rgba(63, 42, 95, 0.55); }
+  .row.newmult .call { color: #e9d5ff; }
 
   .comment {
     color: #8a949d;

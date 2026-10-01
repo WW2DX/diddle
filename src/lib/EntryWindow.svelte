@@ -8,6 +8,9 @@
   import { settings } from "$lib/settings.svelte";
   import { macroState } from "$lib/macros.svelte";
   import { entryBus } from "$lib/entry.svelte";
+  import { cty } from "$lib/ctyStore.svelte";
+  import { scoreStore } from "$lib/score.svelte";
+  import { chime } from "$lib/sound";
 
   let { rig }: { rig: RigState } = $props();
 
@@ -36,26 +39,44 @@
 
   // Look the call up in the N1MM-style history file and pre-fill Exch if
   // the contest can predict it (name/state/zone — never serials).
+  // Also predicts what the history file can't: in CQ WW the zone comes from
+  // the country file (history files don't carry it), so a DX station's
+  // exchange is there before he sends it.
   function lookupHistory(c: string) {
     if (histTimer) clearTimeout(histTimer);
-    if (!contest.historyExchange || c.length < 3 || /^[0-9.]+$/.test(c)) return;
+    if (c.length < 3 || /^[0-9.]+$/.test(c)) return;
     histTimer = setTimeout(async () => {
-      try {
-        const rec = await historyLookup(c);
-        if (normalizeCall(call) !== c) return; // call changed meanwhile
-        const ex = rec ? contest.historyExchange!(rec) : "";
-        if (ex && (exchRcvd.trim() === "" || exchFromHistory)) {
-          exchRcvd = ex;
-          exchFromHistory = true;
-        } else if (!ex && exchFromHistory) {
-          exchRcvd = "";
-          exchFromHistory = false;
+      let ex = "";
+      if (contest.historyExchange) {
+        try {
+          const rec = await historyLookup(c);
+          ex = rec ? contest.historyExchange(rec) : "";
+        } catch (e) {
+          console.error("history_lookup failed", e);
         }
-      } catch (e) {
-        console.error("history_lookup failed", e);
+      }
+      if (normalizeCall(call) !== c) return; // call changed meanwhile
+      ex = predictExchange(c, ex);
+      if (ex && (exchRcvd.trim() === "" || exchFromHistory)) {
+        exchRcvd = ex;
+        exchFromHistory = true;
+      } else if (!ex && exchFromHistory) {
+        exchRcvd = "";
+        exchFromHistory = false;
       }
     }, 120);
   }
+
+  // Fill in the CQ zone from the country file when the history exchange
+  // doesn't start with one.
+  function predictExchange(c: string, ex: string): string {
+    if (settings.activeContest !== "cqww-rtty" || /^\d/.test(ex.trim())) return ex;
+    const hit = cty.lookup(c);
+    if (!hit) return ex;
+    return `${String(hit.cq).padStart(2, "0")} ${ex}`.trim();
+  }
+
+
 
   let contest = $derived(activeContest());
   let needsExch = $derived(contest.requiresExchange !== false);
@@ -72,6 +93,13 @@
   let freqEntryHz = $derived(isFreqEntry ? parseFreqInput(call) : null);
   let dupe = $derived(
     !isFreqEntry && call.length >= 3 && qsoLog.isDupe(call, band),
+  );
+  // Multipliers the station being entered would add — shown live, and the
+  // reward (chime + message) when the QSO is logged.
+  let liveNewMults = $derived(
+    !isFreqEntry && call.length >= 3 && !dupe
+      ? scoreStore.newMults(normalizeCall(call), band, exchRcvd.trim())
+      : [],
   );
   let canLog = $derived(
     !isFreqEntry && call.length >= 3 && (!needsExch || exchRcvd.length > 0),
@@ -285,8 +313,10 @@
   let lastTuToken = 0;
   let notice = $state<string | null>(null);
   let noticeTimer: ReturnType<typeof setTimeout> | null = null;
-  function flashNotice(msg: string) {
+  let noticeKind = $state<"warn" | "mult">("warn");
+  function flashNotice(msg: string, kind: "warn" | "mult" = "warn") {
     notice = msg;
+    noticeKind = kind;
     if (noticeTimer) clearTimeout(noticeTimer);
     noticeTimer = setTimeout(() => (notice = null), 4000);
   }
@@ -330,6 +360,11 @@
     // serial+zone for CQ WW; name+state for NAQP). Store both the legible
     // sent string and the raw rcvd string so exports can re-format.
     const sent = contest.buildSent(qsoLog.nextSerial);
+    const gained = scoreStore.newMults(c, band, exchRcvd.trim());
+    if (gained.length) {
+      flashNotice(`NEW MULT — ${gained.join(" · ")}`, "mult");
+      if (settings.multBell) chime();
+    }
     qsoLog.add({
       id: crypto.randomUUID(),
       ts: Date.now(),
@@ -552,8 +587,11 @@
           {/each}
         </span>
       {/if}
+      {#if liveNewMults.length}
+        <span class="mult-chip" title="This station would be a new multiplier">NEW: {liveNewMults.join(" · ")}</span>
+      {/if}
       {#if notice}
-        <span class="del-pending">{notice}</span>
+        <span class={noticeKind === "mult" ? "mult-notice" : "del-pending"}>{notice}</span>
       {/if}
       {#if pendingDelete}
         <span class="del-pending">Ctrl+D again deletes {pendingDelete.call}</span>
@@ -568,6 +606,7 @@
         id="call"
         bind:this={callInput}
         class:dupe={dupe}
+        class:newmult={liveNewMults.length > 0}
         value={call}
         oninput={onCallInput}
         onkeydown={onKey}
@@ -683,6 +722,20 @@
     margin-left: 8px;
     letter-spacing: 1px;
   }
+
+  .mult-chip, .mult-notice {
+    background: #3f2a5f;
+    border: 1px solid #c084fc;
+    color: #e9d5ff;
+    border-radius: 3px;
+    padding: 1px 6px;
+    font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+    font-size: 11px;
+    font-weight: 600;
+  }
+  .mult-notice { animation: multflash 0.6s ease-out 3; }
+  @keyframes multflash { 50% { background: #7c3aed; } }
+  input.newmult:not(.dupe) { border-color: #c084fc; color: #e9d5ff; }
 
   .del-pending {
     background: #4a1f1f;

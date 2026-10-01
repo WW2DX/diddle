@@ -6,6 +6,7 @@
   import { cluster } from "$lib/cluster.svelte";
   import { qsoLog } from "$lib/qsoLog.svelte";
   import { entryBus } from "$lib/entry.svelte";
+  import { scoreStore } from "$lib/score.svelte";
   import { settings } from "$lib/settings.svelte";
   import { rfFromAudio, audioFromRf, dialForRf, isLowerSideband } from "$lib/freq";
   import { bandFromHz } from "$lib/bands";
@@ -848,6 +849,7 @@
         <button
           class="spot-label {o.source}"
           class:worked={o.worked}
+          class:newmult={!o.worked && scoreStore.isNewMult(o.call, bandFromHz(o.abs_hz))}
           style="left: {pct}%"
           onclick={(e) => pickSpotFromClick(e, o.source)}
           oncontextmenu={(e) => queueSpotFromClick(e, o.source)}
@@ -1196,6 +1198,11 @@
     color: #1a0f00;
   }
   /* Already worked on this band — dupe-red, whichever source spotted it. */
+  .spot-label.newmult {
+    border-color: #c084fc !important;
+    color: #e9d5ff !important;
+    background: rgba(63, 42, 95, 0.92) !important;
+  }
   .spot-label.worked {
     background: rgba(248, 113, 113, 0.92);
     color: #1a0606;

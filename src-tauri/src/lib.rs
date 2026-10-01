@@ -1,5 +1,6 @@
 mod audio_input;
 mod call_history;
+mod cty_file;
 mod cluster;
 pub mod dsp;
 mod ipc;
@@ -86,6 +87,10 @@ pub fn run() {
             ipc::tx_live_start,
             ipc::tx_live_push,
             ipc::tx_live_finish,
+            cty_file::cty_cached,
+            cty_file::cty_download,
+            cty_file::cty_load_file,
+            cty_file::cty_reset,
             ipc::save_file_text,
             ipc::scp_search,
             ipc::scp_load_file,

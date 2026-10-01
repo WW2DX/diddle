@@ -36,7 +36,9 @@ A complete rundown of what Diddle does today, plus what's planned.
 
 ## Macros & keyboard workflow
 
-- **8 editable macros (F1–F8)** with sensible RTTY contest defaults (CQ, exchange, TU, repeat, AGN, BRK, 73…).
+- **16 editable macros** — F1–F8 plus Shift+F1–F8 — with sensible RTTY contest defaults (CQ, exchange, TU, repeat, AGN, BRK, 73, QRZ, CALL?, NR?…).
+- **Chained F-keys** — press F-keys back to back; each one queues onto the transmission already on the air instead of being refused.
+- **NEXT queue** — right-click callers in the RX window or on the waterfall to queue them (the first goes straight into an empty Call). In Run, ESM's TU step sends TU, logs, loads the next caller and sends him the exchange in the same transmission.
 - **ESM — Enter Sends Message** (N1MM-style stepped Enter). Run: empty → CQ (F1), call entered → his call + your exchange (F2) and focus jumps to Exch, call+exch → TU (F3) + log. Search & Pounce: empty or call-only → your call (F4), call+exch → your exchange (F2) + log. The ESM chip shows what `Enter` will do next; with ESM off, `Enter` only logs and you move between fields yourself.
 - **Frequency in the Call field** — type `14080` (kHz) and press `Enter` to QSY the radio so the signal lands on your mark tone.
 - **Call History pre-fill** — load an N1MM+ Call History file and the received exchange is filled in the moment a known call is typed or grabbed (contest-aware: Name + State for NAQP, State for Roundup, Zone + State for CQ WW).
@@ -74,10 +76,17 @@ Built-in profiles that format your sent exchange and hint the received field:
 
 Each profile knows its Cabrillo `CONTEST:` name and builds the sent exchange from your operator settings.
 
+## Multipliers & score
+
+- **Country file** — AD1C's `cty.dat` is bundled; update it from country-files.com or load your own `cty.dat` / `WL_CTY.DAT` in Settings. Gives every call its country, CQ/ITU zone and continent (US/VE zones by call area).
+- **Zone prediction** — in CQ WW the zone is filled in from the country file (call-history files don't carry it), together with the history state when there is one.
+- **New-multiplier highlighting** — calls that would be a new multiplier on their band are purple in the RX window, on the waterfall, in the bandmap and in the Call field, with a `NEW: Zone 14 · Ukraine` tag while you enter them. Logging one flashes `NEW MULT` and plays a chime (can be turned off).
+- **Score panel** — QSOs, points and multipliers by band, totals and the claimed score, for CQ WW RTTY (zones + countries + W/VE states/provinces per band; 1/2/3 points), ARRL RTTY Roundup (states/provinces + DXCC once), NAQP RTTY (states/provinces + NA countries per band) and CQ WPX RTTY (prefixes; 1/3 points, doubled on 40–160 m). Rules are implemented in outline — check the sponsor's current rules before relying on a claimed score.
+
 ## Exports
 
-- **ADIF** — standard `.adi` with `PROGRAMID: Diddle`, per-QSO RTTY records, and an `APP_DIDDLE_SERIAL` field.
-- **Cabrillo 3.0** — contest-ready log with header (callsign, contest, category, name, grid) and `QSO:` lines.
+- **ADIF** — standard `.adi` with `PROGRAMID: Diddle`, per-QSO RTTY records, and each exchange part in its own field the way N1MM+ and WriteLog import it: `CONTEST_ID`, `CQZ`, `ITUZ`, `STATE` / `VE_PROV`, `SRX`/`STX`, `NAME`, `PFX`, `COUNTRY`, `CONT`.
+- **Cabrillo 3.0** — header with the computed `CLAIMED-SCORE`, and `QSO:` lines in each contest's column layout (CQ WW: RST, zone, state/province or `DX`; Roundup: state/province or serial; NAQP: name + location; WPX: RST + serial).
 
 ## Super Check Partial (SCP)
 
@@ -96,7 +105,9 @@ Each profile knows its Cabrillo `CONTEST:` name and builds the sent exchange fro
 
 ## Display & tools
 
-- **Spectrum waterfall** with callsign overlay.
+- **Spectrum waterfall** with callsign overlay. Wheel / ←→ tune the radio 10 Hz (Shift 100 Hz, Alt/Option 1 kHz); PgUp/PgDn step ±1 kHz.
+- **Per-window fonts** — family, size and slashed zero for the RX decoder, Entry, Bandmap and Log windows.
+- **Resizable docked bandmap** — drag its left edge.
 - **Tuning scope** — classic crossed-bananas XY display for visually netting on a signal.
 - **Collapsible settings panel** for operator + contest configuration.
 - **WAV player** — load a recorded `.wav` to test/replay the decoder offline.
