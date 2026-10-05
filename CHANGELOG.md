@@ -5,6 +5,8 @@ All notable changes to Diddle are documented here. Format loosely follows
 
 ## [Unreleased]
 
+## [0.1.28] — 2026-10-05
+
 ### Added
 - **Stack macros: `<CRLF>`, `<LOGIT>`, `<POPSTACK>`.** Tokens run left to right as the macro goes out: `<CRLF>` starts a new line, `<LOGIT>` logs the QSO in the entry form, and `<POPSTACK>` loads the next stacked caller, so a later `<CALL>` is him and a later `<SERIAL>` is the next number. They work from an F-key pressed by hand as well as from ESM.
 - **Stack box** under the entry fields in Run: the callers you've right-clicked, in order. Click one to drop it; *clear* empties it.
