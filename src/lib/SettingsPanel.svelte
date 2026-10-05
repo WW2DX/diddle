@@ -10,6 +10,8 @@
     historyLoadFile,
     historyClear,
     historyStatus,
+    listFonts,
+    type FontFamily,
     type ScpStatus,
     type CallHistoryStatus,
   } from "$lib/tci";
@@ -17,6 +19,7 @@
   import { macroState, keyLabel } from "$lib/macros.svelte";
   import { contestSetups } from "$lib/contestSetups.svelte";
   import { cty } from "$lib/ctyStore.svelte";
+  import { chime } from "$lib/sound";
 
   // Show the format hint based on the current selection.
   let formatHint = $derived(activeContest().exchangeFormat);
@@ -100,7 +103,16 @@
     contestSetups.remove(activeSetup.id);
   }
 
+  // Installed font families: fixed-pitch ones first, since contest windows
+  // line up best in them, then everything else.
+  let fonts = $state<FontFamily[]>([]);
+  let monoFonts = $derived(fonts.filter((f) => f.mono));
+  let otherFonts = $derived(fonts.filter((f) => !f.mono));
+
   onMount(async () => {
+    listFonts()
+      .then((fs) => (fonts = fs))
+      .catch((e) => console.error("listFonts failed", e));
     try {
       scp = await scpStatus();
     } catch (e) {
@@ -397,6 +409,21 @@
       {#if hist.count > 0}
         <button class="ghost" onclick={clearHistory}>Clear</button>
       {/if}
+      <label class="stack-key" title="Which history column goes into Exch. Auto uses the contest's own fields (zone + state for CQ WW, name + state for NAQP…), or EXCH1 for a contest with none — so a file headed !!Order!!,Call,Exch1,UserText works for any contest.">
+        Exch from
+        <select
+          value={settings.historyField}
+          onchange={(e) => settings.setHistoryField((e.target as HTMLSelectElement).value)}
+        >
+          <option value="">auto</option>
+          {#if settings.historyField && !hist.fields.some((f) => f.toLowerCase() === settings.historyField.toLowerCase())}
+            <option value={settings.historyField}>{settings.historyField}</option>
+          {/if}
+          {#each hist.fields as f}
+            <option value={f}>{f}</option>
+          {/each}
+        </select>
+      </label>
       <span class="hint">
         Pre-fills Exch when a known call is typed or grabbed
         {#if hist.fields.length > 0}
@@ -470,6 +497,7 @@
         onchange={(e) => settings.setMultBell((e.target as HTMLInputElement).checked)}
       />
       Chime on a new multiplier
+      <button type="button" class="ghost" onclick={(e) => { e.preventDefault(); chime(); }}>Test</button>
     </label>
     {#if cty.error}
       <div class="scp-error">{cty.error}</div>
@@ -479,25 +507,38 @@
   <div class="cluster">
     <div class="cluster-info">
       <span class="scp-label">Display fonts</span>
-      <span class="dim">per window · blank = built-in default</span>
+      <span class="dim">per window · any installed font</span>
     </div>
-    <datalist id="font-suggestions">
-      {#each ["Menlo", "Monaco", "SF Mono", "Consolas", "Cascadia Mono", "Lucida Console", "Courier New", "DejaVu Sans Mono", "Andale Mono", "Arial", "Verdana", "Tahoma", "Segoe UI"] as f}
-        <option value={f}></option>
-      {/each}
-    </datalist>
     <div class="font-rows">
       {#each FONT_WINS as w}
         {@const f = settings.fonts[w.id]}
         <div class="font-row" style={settings.fontStyle(w.id)}>
           <span class="font-win">{w.label}</span>
-          <input
+          <select
             class="font-family"
-            list="font-suggestions"
             value={f.family}
-            placeholder="monospace (default)"
-            onchange={(e) => settings.setFont(w.id, { family: (e.target as HTMLInputElement).value })}
-          />
+            style={f.family ? `font-family: "${f.family}"` : ""}
+            onchange={(e) => settings.setFont(w.id, { family: (e.target as HTMLSelectElement).value })}
+          >
+            <option value="">monospace (default)</option>
+            {#if f.family && !fonts.some((x) => x.name === f.family)}
+              <option value={f.family}>{f.family}</option>
+            {/if}
+            {#if monoFonts.length}
+              <optgroup label="Fixed-pitch">
+                {#each monoFonts as x (x.name)}
+                  <option value={x.name}>{x.name}</option>
+                {/each}
+              </optgroup>
+            {/if}
+            {#if otherFonts.length}
+              <optgroup label="Other fonts">
+                {#each otherFonts as x (x.name)}
+                  <option value={x.name}>{x.name}</option>
+                {/each}
+              </optgroup>
+            {/if}
+          </select>
           <input
             class="font-size"
             type="number"
@@ -511,13 +552,13 @@
             }}
           />
           <span class="dim">px</span>
-          <label class="font-zero" title="Slashed zero (Ø-style 0), where the font supports it">
+          <label class="font-zero" title="Ask the font for its slashed-zero variant. Only fonts that have one change (Source Code Pro, JetBrains Mono, Fira Code…). Unticked you get the font's own zero — Consolas and Menlo, for example, already slash theirs, so the box changes nothing there.">
             <input
               type="checkbox"
               checked={f.slashedZero}
               onchange={(e) => settings.setFont(w.id, { slashedZero: (e.target as HTMLInputElement).checked })}
             />
-            slashed 0
+            force slashed 0
           </label>
           <span class="font-sample">K0ABC 599 05 NY</span>
         </div>
@@ -532,10 +573,31 @@
         <span class="mono">&lt;MYCALL&gt;</span>
         <span class="mono">&lt;CALL&gt;</span>
         <span class="mono">&lt;SERIAL&gt;</span> are substituted at send time (case doesn't matter).
+        <span class="mono">&lt;CRLF&gt;</span> new line ·
+        <span class="mono">&lt;LOGIT&gt;</span> log the QSO ·
+        <span class="mono">&lt;POPSTACK&gt;</span> load the next stacked caller (a later
+        <span class="mono">&lt;CALL&gt;</span> is him).
       </span>
       <button class="ghost macro-reset-all" onclick={() => macroState.resetAll()}>
         Reset all
       </button>
+    </div>
+    <div class="macros-head">
+      <label class="stack-key">
+        ESM TU with callers stacked sends
+        <select
+          value={settings.stackTuKey}
+          onchange={(e) => settings.setStackTuKey((e.target as HTMLSelectElement).value)}
+        >
+          {#each macroState.macros as m (m.key)}
+            <option value={m.key}>{keyLabel(m.key)} · {m.label}</option>
+          {/each}
+        </select>
+      </label>
+      <span class="hint">
+        e.g. <span class="mono">&lt;CRLF&gt;TU &lt;CALL&gt;&lt;LOGIT&gt; NOW&lt;CRLF&gt;&lt;POPSTACK&gt;&lt;CALL&gt; 599 05 NY&lt;CRLF&gt;</span>
+        — without <span class="mono">&lt;POPSTACK&gt;</span> ESM sends TU, logs, then F2 to the next caller.
+      </span>
     </div>
     <div class="macro-rows">
       {#each macroState.macros as m, i (m.key)}
@@ -780,7 +842,7 @@
     font-size: 12px;
   }
   .font-win { color: #c5d1de; }
-  .font-row input.font-family,
+  .font-row select.font-family,
   .font-row input.font-size {
     background: #0c0e10;
     border: 1px solid #2a2f33;
@@ -813,6 +875,7 @@
   .macros-head .hint {
     flex: 1;
   }
+  .stack-key { display: flex; align-items: center; gap: 6px; white-space: nowrap; color: #8a949d; font-size: 12px; }
   .macros-head .mono {
     color: #c5d1de;
     margin-right: 6px;

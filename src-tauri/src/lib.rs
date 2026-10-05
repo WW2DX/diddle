@@ -80,6 +80,7 @@ pub fn run() {
             ipc::sim_update,
             ipc::get_rtty_config,
             ipc::set_rtty_config,
+            ipc::set_rtty_squelch,
             ipc::save_log,
             ipc::load_log,
             ipc::transmit,
@@ -105,6 +106,7 @@ pub fn run() {
             ipc::history_clear,
             ipc::history_status,
             ipc::history_lookup,
+            ipc::list_fonts,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

@@ -2,7 +2,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
-import { CtyDb } from "../src/lib/cty.ts";
+import { CtyDb, usStateZone } from "../src/lib/cty.ts";
 
 const db = CtyDb.parse(readFileSync(new URL("../static/cty.dat", import.meta.url), "utf8"));
 const look = (c: string) => {
@@ -55,4 +55,17 @@ test("WL_CTY template lines are skipped", () => {
   const wl = CtyDb.parse("United States: 05: 08: NA: 37.6: 91.87: 5.0: K:\n#   K: K6(3)[6];\n    K,N,W;\n");
   assert.equal(wl.lookup("K6XX")?.cq, 3);
   assert.equal(wl.lookup("W1XX")?.cq, 5);
+});
+
+test("US state decides the zone where the call area can't", () => {
+  assert.equal(usStateZone("ky"), 4); // W4 land, zone 4
+  assert.equal(usStateZone("WV"), 5); // W8 land, zone 5
+  assert.equal(usStateZone("MT"), 4); // W7 land, zone 4
+  assert.equal(usStateZone("CA"), 3);
+  assert.equal(usStateZone("NY"), 5);
+  assert.equal(usStateZone("ON"), undefined);
+  // Every state + DC has a zone except the two that are their own entities.
+  for (const s of "AL AZ AR CA CO CT DE FL GA ID IL IN IA KS KY LA ME MD MA MI MN MS MO MT NE NV NH NJ NM NY NC ND OH OK OR PA RI SC SD TN TX UT VT VA WA WV WI WY DC".split(" ")) {
+    assert.ok(usStateZone(s), s);
+  }
 });

@@ -52,6 +52,26 @@ const VE_AREA_ZONE: Record<string, number> = {
   "1": 5, "2": 5, "3": 4, "4": 4, "5": 4, "6": 4, "7": 3, "8": 1, "9": 5,
 };
 
+// CQ zone by US state — where the station actually is, which the call
+// area only guesses at (a W4 in Kentucky is zone 4, a W8 in West Virginia
+// zone 5, anyone who moved…). Alaska and Hawaii are their own entities.
+const US_STATE_ZONE: Record<string, number> = {
+  // 3: West
+  CA: 3, AZ: 3, ID: 3, NV: 3, OR: 3, UT: 3, WA: 3,
+  // 4: Central
+  MT: 4, WY: 4, CO: 4, IA: 4, KS: 4, MN: 4, MO: 4, NE: 4, ND: 4, SD: 4,
+  AR: 4, LA: 4, MS: 4, NM: 4, OK: 4, TX: 4, IL: 4, IN: 4, WI: 4, MI: 4,
+  OH: 4, AL: 4, KY: 4, TN: 4,
+  // 5: East
+  CT: 5, ME: 5, MA: 5, NH: 5, RI: 5, VT: 5, NJ: 5, NY: 5, DE: 5, MD: 5,
+  PA: 5, DC: 5, FL: 5, GA: 5, NC: 5, SC: 5, VA: 5, WV: 5,
+};
+
+/// CQ zone of a US state (two-letter), or undefined.
+export function usStateZone(state: string): number | undefined {
+  return US_STATE_ZONE[state.trim().toUpperCase()];
+}
+
 export class CtyDb {
   private exact = new Map<string, Entry>();
   private prefixes = new Map<string, Entry>();

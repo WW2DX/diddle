@@ -142,6 +142,15 @@ mod tests {
         assert_eq!(fields, vec!["Name".to_string(), "State".to_string()]);
     }
 
+    // A URC DX history file: the exchange (territory code) is in EXCH1,
+    // with spaces after the commas.
+    #[test]
+    fn exch1_header_with_spaces() {
+        let (recs, fields) = parse("!!Order!!, CALL, EXCH1, USERTEXT\nUR5ZZ, KR, worked 2025\n");
+        assert_eq!(recs["UR5ZZ"]["EXCH1"], "KR");
+        assert_eq!(fields, vec!["EXCH1".to_string(), "USERTEXT".to_string()]);
+    }
+
     #[test]
     fn default_order_without_header() {
         let (recs, _) = parse("K1ABC,JOE,,,,MA\n");

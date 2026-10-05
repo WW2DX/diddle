@@ -772,7 +772,20 @@ impl World {
                 if let Some(idx) = self.match_caller(&tokens).filter(|(_, exact)| *exact).map(|(i, _)| i) {
                     let prev = self.worked.take();
                     if let Some(p) = prev {
-                        self.log("sim", format!("{} left without a TU", p.st.call));
+                        if has_tu {
+                            // TU to him and on to the next caller in one
+                            // transmission (Diddle's stack TU).
+                            self.qso_count += 1;
+                            self.log(
+                                "sim",
+                                format!(
+                                    "QSO #{} complete: {} sent {}",
+                                    self.qso_count, p.st.call, p.st.exchange
+                                ),
+                            );
+                        } else {
+                            self.log("sim", format!("{} left without a TU", p.st.call));
+                        }
                     }
                     let c = self.callers.remove(idx);
                     self.log("sim", format!("answering {} instead", c.st.call));
@@ -1279,6 +1292,7 @@ impl Simulator {
             freq: dial,
             mode: "digl".into(),
             ptt,
+            ..RigState::default()
         };
         let _ = self.app.emit("tci:rig", &r);
     }

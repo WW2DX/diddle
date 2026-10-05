@@ -15,6 +15,13 @@ export interface RigState {
   freq: number;
   mode: string;
   ptt: boolean;
+  /// RX filter edges, Hz relative to the VFO (negative = below), as the
+  /// radio last reported them; absent until it does.
+  filter_lo?: number | null;
+  filter_hi?: number | null;
+  /// Radio AGC: "normal" | "fast" | "off", and its gain in dB.
+  agc_mode?: string | null;
+  agc_gain?: number | null;
 }
 
 export const DEFAULT_TCI_URL = "ws://localhost:40001";
@@ -64,6 +71,11 @@ export async function txAbort(): Promise<void> {
 
 export async function sendRaw(raw: string): Promise<void> {
   await invoke("tci_send", { raw });
+}
+
+/// RX-window decoder squelch, 0 (open) to 100.
+export async function setRttySquelch(squelch: number): Promise<void> {
+  await invoke("set_rtty_squelch", { squelch });
 }
 
 export async function audioStart(trx = 0): Promise<void> {
@@ -357,4 +369,15 @@ export async function historyStatus(): Promise<CallHistoryStatus> {
 
 export async function historyLookup(call: string): Promise<CallHistoryRecord | null> {
   return await invoke("history_lookup", { call });
+}
+
+export interface FontFamily {
+  name: string;
+  /// Every face of the family is fixed-pitch.
+  mono: boolean;
+}
+
+/// Font families installed on this computer, sorted by name.
+export async function listFonts(): Promise<FontFamily[]> {
+  return await invoke("list_fonts");
 }

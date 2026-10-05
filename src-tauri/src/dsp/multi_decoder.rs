@@ -274,6 +274,9 @@ impl MultiDecoder {
                 mark_hz: *m,
                 space_hz: *s,
                 baud: 45.45,
+                // Spots are vetted against SCP downstream; the RX-window
+                // squelch would only cost weak ones.
+                squelch: 0.0,
                 ..RttyConfig::default()
             };
             let demod = RttyDemod::new(self.sample_rate, cfg);

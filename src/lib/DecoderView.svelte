@@ -1,6 +1,7 @@
 <script lang="ts">
   import { onMount, onDestroy } from "svelte";
-  import { onRtty, onTxEcho, scpContainsAny, type RigState } from "$lib/tci";
+  import { onRtty, onTxEcho, scpContainsAny, setRttySquelch, type RigState } from "$lib/tci";
+  import { radioRx, RX_WIDTHS } from "$lib/radioRx.svelte";
   import { rttyConfig } from "$lib/rttyConfig.svelte";
   import { qsoLog } from "$lib/qsoLog.svelte";
   import { bandFromHz } from "$lib/bands";
@@ -11,6 +12,26 @@
   import TuningScope from "$lib/TuningScope.svelte";
 
   let { rig }: { rig: RigState } = $props();
+
+  // Squelch: push the saved setting to the decoder once settings are in,
+  // and again on every change.
+  $effect(() => {
+    if (!settings.loaded) return;
+    setRttySquelch(settings.squelch).catch((e) => console.error("set_rtty_squelch failed", e));
+  });
+
+  // Radio RX filter: remember the radio's own wide filter, and keep a
+  // narrow one centred on the tone pair as we retune.
+  $effect(() => {
+    radioRx.observe(rig);
+  });
+  $effect(() => {
+    radioRx.follow(rig, rttyConfig.markHz, rttyConfig.spaceHz);
+  });
+  let agc = $derived(rig.agc_mode ?? null);
+  let filterWidth = $derived(
+    rig.filter_lo != null && rig.filter_hi != null ? rig.filter_hi - rig.filter_lo : null,
+  );
 
   // Calls already worked on the current band — their chips turn dupe-red so
   // the operator doesn't grab a station they've logged.
@@ -482,13 +503,69 @@
       </label>
       <button class="ghost" onclick={clear}>clear</button>
     </div>
+    <div class="rx-row">
+      <label
+        class="sq"
+        title="Squelch: how clean a signal must look before the RX window prints it. 0 = open (everything, noise included); turn it up until the noise between signals stops printing. Weak stations go quiet first."
+      >
+        <span class="dim">SQ</span>
+        <input
+          type="range"
+          min="0"
+          max="100"
+          step="1"
+          value={settings.squelch}
+          oninput={(e) => settings.setSquelch((e.target as HTMLInputElement).valueAsNumber, false)}
+          onchange={(e) => settings.setSquelch((e.target as HTMLInputElement).valueAsNumber)}
+        />
+        <span class="num sq-val">{settings.squelch}</span>
+      </label>
+      <span
+        class="shift-group"
+        title="Radio RX filter (over TCI). 500 and 250 are centred on the mark/space pair and follow it as you retune; they also hide the rest of the band from the waterfall and the bandmap. Wide puts back the radio's own filter.{filterWidth != null ? ` Radio now: ${filterWidth} Hz.` : ''}{radioRx.lastError ? ` — ${radioRx.lastError}` : ''}"
+      >
+        <span class="dim">filter:</span>
+        {#each RX_WIDTHS as w}
+          <button
+            class="shift-btn"
+            class:active={radioRx.width === w}
+            onclick={() => radioRx.setWidth(w, rig, rttyConfig.markHz, rttyConfig.spaceHz)}
+          >
+            {w === 0 ? "wide" : w}
+          </button>
+        {/each}
+      </span>
+      <span
+        class="shift-group"
+        title="Radio AGC (over TCI). Off stops a strong neighbour from pumping the receiver gain; set the gain by hand then.{radioRx.lastError ? ` — ${radioRx.lastError}` : ''}"
+      >
+        <span class="dim">AGC:</span>
+        {#each ["normal", "fast", "off"] as const as m}
+          <button class="shift-btn" class:active={agc === m} onclick={() => radioRx.setAgc(m)}>
+            {m === "normal" ? "norm" : m}
+          </button>
+        {/each}
+        {#if agc === "off"}
+          <input
+            class="history-input"
+            type="number"
+            min="-20"
+            max="120"
+            value={rig.agc_gain ?? ""}
+            title="Receiver gain with AGC off, dB (−20 to 120)"
+            onchange={(e) => radioRx.setAgcGain((e.target as HTMLInputElement).valueAsNumber)}
+          />
+          <span class="dim">dB</span>
+        {/if}
+      </span>
+    </div>
   </header>
   <div class="rx-body">
     <TuningScope />
     <div class="rx-wrap">
       <!-- svelte-ignore a11y_click_events_have_key_events, a11y_no_static_element_interactions -->
       <div class="rx-text" bind:this={scrollEl} onscroll={onScroll} onclick={onTextClick}
-        >{#each segments as seg}{#if seg.call}<button class="call-chip" class:tx={seg.tx} class:dupe={workedHere.has(seg.call!)} class:newmult={!workedHere.has(seg.call!) && scoreStore.isNewMult(seg.call!, band)} title={workedHere.has(seg.call!) ? `${seg.call} — already worked on ${band}` : `Click: load ${seg.call} · right-click: queue as NEXT caller`} onclick={() => pickCall(seg.call!)} oncontextmenu={(e) => { e.preventDefault(); entryBus.queueNext(seg.call!); }}>{seg.s}</button>{:else}<span class:tx={seg.tx}>{seg.s}</span>{/if}{/each}{#if pendingLine}<span class="pending">{pendingLine}</span>{/if}{#if segments.length === 0 && !pendingLine}{" "}{/if}</div
+        >{#each segments as seg}{#if seg.call}<button class="call-chip" class:tx={seg.tx} class:dupe={workedHere.has(seg.call!)} class:newmult={!workedHere.has(seg.call!) && scoreStore.isNewMult(seg.call!, band)} title={workedHere.has(seg.call!) ? `${seg.call} — already worked on ${band}` : `Click: load ${seg.call} · right-click: add to the stack`} onclick={() => pickCall(seg.call!)} oncontextmenu={(e) => { e.preventDefault(); entryBus.queueNext(seg.call!); }}>{seg.s}</button>{:else}<span class:tx={seg.tx}>{seg.s}</span>{/if}{/each}{#if pendingLine}<span class="pending">{pendingLine}</span>{/if}{#if segments.length === 0 && !pendingLine}{" "}{/if}</div
       >
       {#if !autoScroll}
         <button class="jump-btn" onclick={jumpToBottom} title="Jump to latest">
@@ -515,6 +592,20 @@
     margin-bottom: 8px;
     flex-wrap: wrap;
   }
+
+  .rx-row {
+    flex-basis: 100%;
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 14px;
+    font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+    font-size: 11px;
+    color: #8a949d;
+  }
+  .sq { display: flex; align-items: center; gap: 6px; }
+  .sq input { width: 110px; }
+  .sq-val { min-width: 2.5ch; text-align: right; }
 
   h2 {
     margin: 0;

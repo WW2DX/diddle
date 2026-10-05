@@ -134,6 +134,14 @@ pub struct RigState {
     pub freq: u64,
     pub mode: String,
     pub ptt: bool,
+    /// RX filter edges, Hz relative to the VFO (negative = below it), as
+    /// the radio last reported them.
+    pub filter_lo: Option<i32>,
+    pub filter_hi: Option<i32>,
+    /// Radio AGC: "normal", "fast" or "off", and its gain in dB (the fixed
+    /// gain while AGC is off).
+    pub agc_mode: Option<String>,
+    pub agc_gain: Option<i32>,
 }
 
 /// Wire-level TCI message event, emitted for the debug console.
@@ -860,6 +868,12 @@ impl TciClient {
                     }
                 }
                 let _ = self.send("audio_start:0;".to_string()).await;
+                // Ask for the RX filter and AGC so the decoder panel shows
+                // the radio's settings (servers that don't know these
+                // commands just ignore them).
+                for c in ["rx_filter_band:0;", "agc_mode:0;", "agc_gain:0;"] {
+                    let _ = self.send(c.to_string()).await;
+                }
                 // Force DIGL so AFSK RTTY lands on the expected sideband.
                 self.force_rtty_mode().await;
             }
@@ -889,6 +903,29 @@ impl TciClient {
                         info!(%mode, "rig left DIGL — restoring");
                         self.force_rtty_mode().await;
                     }
+                }
+            }
+            "rx_filter_band" if m.arg_u8(0) == Some(0) && m.args.len() >= 3 => {
+                let lo = m.arg_str(1).and_then(|v| v.parse().ok());
+                let hi = m.arg_str(2).and_then(|v| v.parse().ok());
+                if let (Some(lo), Some(hi)) = (lo, hi) {
+                    let mut r = self.rig.write().await;
+                    r.filter_lo = Some(lo);
+                    r.filter_hi = Some(hi);
+                    drop(r);
+                    self.emit_rig().await;
+                }
+            }
+            "agc_mode" if m.arg_u8(0) == Some(0) => {
+                if let Some(mode) = m.arg_str(1) {
+                    self.rig.write().await.agc_mode = Some(mode.to_ascii_lowercase());
+                    self.emit_rig().await;
+                }
+            }
+            "agc_gain" if m.arg_u8(0) == Some(0) => {
+                if let Some(g) = m.arg_str(1).and_then(|v| v.parse::<f32>().ok()) {
+                    self.rig.write().await.agc_gain = Some(g.round() as i32);
+                    self.emit_rig().await;
                 }
             }
             "trx" if m.arg_u8(0) == Some(0) => {

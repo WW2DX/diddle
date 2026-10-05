@@ -98,6 +98,16 @@ export const CONTESTS: ContestProfile[] = [
   },
 ];
 
+/// The received exchange a call-history record predicts. The column picked
+/// in Settings wins; otherwise the contest's own rule; otherwise Exch1 —
+/// N1MM's catch-all exchange column, which is how history files for
+/// contests Diddle has no profile for (URC DX, say) carry theirs.
+export function historyExchange(contest: ContestProfile, rec: Record<string, string>): string {
+  if (settings.historyField) return hf(rec, settings.historyField);
+  if (contest.historyExchange) return contest.historyExchange(rec);
+  return hf(rec, "Exch1");
+}
+
 export function activeContest(): ContestProfile {
   return CONTESTS.find((c) => c.id === settings.activeContest) || CONTESTS[0];
 }

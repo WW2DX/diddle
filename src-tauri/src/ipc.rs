@@ -132,7 +132,20 @@ pub async fn set_rtty_config(
         baud,
         tx_mark_hz,
         tx_space_hz,
+        squelch: state.rtty.get().await.squelch,
     };
+    state.rtty.set(cfg).await;
+    Ok(())
+}
+
+/// RX-window decoder squelch, 0 (open) to 100.
+#[tauri::command]
+pub async fn set_rtty_squelch(state: State<'_, AppState>, squelch: f32) -> Result<(), String> {
+    if !(0.0..=100.0).contains(&squelch) {
+        return Err(format!("squelch out of range: {squelch}"));
+    }
+    let mut cfg = state.rtty.get().await;
+    cfg.squelch = squelch;
     state.rtty.set(cfg).await;
     Ok(())
 }
@@ -428,4 +441,37 @@ pub async fn history_lookup(
     call: String,
 ) -> Result<Option<std::collections::HashMap<String, String>>, String> {
     Ok(state.history.lookup(&call))
+}
+
+/// One installed font family, for the per-window font pickers.
+#[derive(serde::Serialize)]
+pub struct FontFamily {
+    name: String,
+    /// Every face of the family is fixed-pitch.
+    mono: bool,
+}
+
+/// Every font family installed on this computer, sorted by name. Scanning
+/// the system font folders takes a moment, so it runs off the async runtime.
+#[tauri::command]
+pub async fn list_fonts() -> Result<Vec<FontFamily>, String> {
+    tauri::async_runtime::spawn_blocking(|| {
+        let mut db = fontdb::Database::new();
+        db.load_system_fonts();
+        let mut fams: std::collections::BTreeMap<String, bool> = std::collections::BTreeMap::new();
+        for face in db.faces() {
+            // The first name is the family's English (or default) name —
+            // the one CSS font-family matches.
+            let Some((name, _)) = face.families.first() else { continue };
+            // Hidden system faces (".SF NS…" on macOS) aren't selectable.
+            if name.is_empty() || name.starts_with('.') {
+                continue;
+            }
+            let mono = fams.entry(name.clone()).or_insert(true);
+            *mono &= face.monospaced;
+        }
+        fams.into_iter().map(|(name, mono)| FontFamily { name, mono }).collect()
+    })
+    .await
+    .map_err(|e| e.to_string())
 }

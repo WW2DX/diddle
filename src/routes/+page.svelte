@@ -96,6 +96,7 @@
     macroState.macros;
     settings.activeContest;
     settings.historyPath;
+    settings.historyField;
     contestSetups.syncActive();
   });
 

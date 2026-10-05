@@ -26,6 +26,9 @@ interface Stored {
   fonts?: Partial<Record<FontWin, WinFont>>;
   multBell?: boolean; // chime on a new multiplier
   bandmapWidth?: number;
+  stackTuKey?: string; // macro ESM sends at the TU step with callers stacked
+  squelch?: number; // RX-window decoder squelch, 0 (open) – 100
+  historyField?: string; // history column that pre-fills Exch; "" = auto
 }
 
 /// Windows whose text font the operator can pick.
@@ -78,6 +81,9 @@ class Settings {
   });
   bandmapWidth = $state<number>(440);
   multBell = $state<boolean>(true);
+  stackTuKey = $state<string>("F8");
+  squelch = $state<number>(30);
+  historyField = $state<string>("");
   loaded = $state(false);
 
   load() {
@@ -112,6 +118,9 @@ class Settings {
         }
         if (obj.bandmapWidth) this.bandmapWidth = this.clampWidth(obj.bandmapWidth);
         if (obj.multBell !== undefined) this.multBell = obj.multBell;
+        if (obj.stackTuKey) this.stackTuKey = obj.stackTuKey;
+        this.historyField = obj.historyField || "";
+        if (obj.squelch !== undefined) this.squelch = Math.min(100, Math.max(0, obj.squelch));
       }
     } catch (e) {
       console.error("settings.load failed", e);
@@ -144,6 +153,9 @@ class Settings {
           fonts: this.fonts,
           bandmapWidth: this.bandmapWidth,
           multBell: this.multBell,
+          stackTuKey: this.stackTuKey,
+          squelch: this.squelch,
+          historyField: this.historyField,
         } satisfies Stored),
       );
     } catch (e) {
@@ -238,6 +250,19 @@ class Settings {
   }
   toggleBandmapSide() {
     this.bandmapSide = !this.bandmapSide;
+    this.save();
+  }
+  /// `persist` false while the slider is being dragged.
+  setSquelch(v: number, persist = true) {
+    this.squelch = Math.round(Math.min(100, Math.max(0, v)));
+    if (persist) this.save();
+  }
+  setHistoryField(v: string) {
+    this.historyField = v;
+    this.save();
+  }
+  setStackTuKey(v: string) {
+    this.stackTuKey = v;
     this.save();
   }
   setMultBell(v: boolean) {

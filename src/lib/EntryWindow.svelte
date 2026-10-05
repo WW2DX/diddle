@@ -1,7 +1,7 @@
 <script lang="ts">
   import { qsoLog } from "$lib/qsoLog.svelte";
   import { bandFromHz, fmtMhz } from "$lib/bands";
-  import { activeContest } from "$lib/contests";
+  import { activeContest, historyExchange } from "$lib/contests";
   import { scpSearch, setFreq, historyLookup, type RigState } from "$lib/tci";
   import { rttyConfig } from "$lib/rttyConfig.svelte";
   import { rfFromAudio, dialForRf, parseFreqInput } from "$lib/freq";
@@ -9,6 +9,7 @@
   import { macroState } from "$lib/macros.svelte";
   import { entryBus } from "$lib/entry.svelte";
   import { cty } from "$lib/ctyStore.svelte";
+  import { usStateZone } from "$lib/cty";
   import { scoreStore } from "$lib/score.svelte";
   import { chime } from "$lib/sound";
 
@@ -47,13 +48,11 @@
     if (c.length < 3 || /^[0-9.]+$/.test(c)) return;
     histTimer = setTimeout(async () => {
       let ex = "";
-      if (contest.historyExchange) {
-        try {
-          const rec = await historyLookup(c);
-          ex = rec ? contest.historyExchange(rec) : "";
-        } catch (e) {
-          console.error("history_lookup failed", e);
-        }
+      try {
+        const rec = await historyLookup(c);
+        ex = rec ? historyExchange(contest, rec) : "";
+      } catch (e) {
+        console.error("history_lookup failed", e);
       }
       if (normalizeCall(call) !== c) return; // call changed meanwhile
       ex = predictExchange(c, ex);
@@ -68,12 +67,18 @@
   }
 
   // Fill in the CQ zone from the country file when the history exchange
-  // doesn't start with one.
+  // doesn't start with one. For a US station whose history gives his state,
+  // the state decides — the call area is only a guess at where he is.
   function predictExchange(c: string, ex: string): string {
     if (settings.activeContest !== "cqww-rtty" || /^\d/.test(ex.trim())) return ex;
     const hit = cty.lookup(c);
     if (!hit) return ex;
-    return `${String(hit.cq).padStart(2, "0")} ${ex}`.trim();
+    let zone = hit.cq;
+    if (hit.entity.prefix === "K") {
+      const z = ex.split(/\s+/).map(usStateZone).find((v) => v !== undefined);
+      if (z !== undefined) zone = z;
+    }
+    return `${String(zone).padStart(2, "0")} ${ex}`.trim();
   }
 
 
@@ -208,20 +213,53 @@
       exchSent = true;
       sentCall = c;
       queueMicrotask(() => exchInput?.focus());
+    } else if (entryBus.nextQueue.length) {
+      // Callers stacked: the stack-TU macro thanks this one, logs him
+      // (<LOGIT>), loads the next (<POPSTACK>) and sends him our exchange,
+      // all in one transmission.
+      macroState.send(stackTuText(), { call: c });
     } else {
       macroState.fire("F3", { call: c });
       logQso();
-      // NEXT: straight on to the next queued caller — his exchange chains
-      // onto the TU in the same transmission.
-      const next = entryBus.popNext();
-      if (next) {
-        loadCall(next);
-        macroState.fire("F2", { call: next });
-        exchSent = true;
-        sentCall = next;
-      }
     }
   }
+
+  // The stack-TU macro as ESM sends it. One without <POPSTACK> (F8 still
+  // holding something else) falls back to TU + log + the next caller's F2
+  // exchange, and one without <LOGIT> gets it just before <POPSTACK>, so
+  // the QSO is never left unlogged.
+  function stackTuText(): string {
+    const m = macroState.macros.find((x) => x.key === settings.stackTuKey);
+    if (m && /<POPSTACK>/i.test(m.text)) {
+      return /<LOGIT>/i.test(m.text) ? m.text : m.text.replace(/<POPSTACK>/i, "<LOGIT><POPSTACK>");
+    }
+    const f2 = macroState.macros.find((x) => x.key === "F2")?.text ?? "<CALL> 599 <SERIAL>";
+    return `TU <CALL><LOGIT><CRLF><POPSTACK>${f2}`;
+  }
+
+  // What the <LOGIT> and <POPSTACK> macro tokens do — whether ESM sent the
+  // macro or the operator pressed its F-key.
+  $effect(() => {
+    entryBus.actions = {
+      logIt: () => {
+        if (!canLog) return false;
+        logQso();
+        return true;
+      },
+      popStack: () => {
+        const next = entryBus.popNext();
+        if (!next) return undefined;
+        loadCall(next);
+        // The rest of the macro is his exchange, so the next Enter is TU.
+        exchSent = true;
+        sentCall = next;
+        return next;
+      },
+    };
+    return () => {
+      entryBus.actions = null;
+    };
+  });
 
 
   // The phase label shown next to the entry fields so the operator knows
@@ -246,7 +284,9 @@
       return { cls: "excg", label: "Run · ↵ Excg" };
     return {
       cls: "tu",
-      label: entryBus.nextQueue.length ? "Run · ↵ TU+Log+Next" : "Run · ↵ TU+Log",
+      label: entryBus.nextQueue.length
+        ? `Run · ↵ ${settings.stackTuKey} TU+Log+Next`
+        : "Run · ↵ TU+Log",
     };
   });
 
@@ -265,12 +305,24 @@
     if (t === lastBusToken) return;
     lastBusToken = t;
     const c = normalizeCall(entryBus.requestedCall);
-    if (c) loadCall(c);
+    if (c) loadCall(c, entryBus.requestedFocus);
+  });
+
+  // A caller right-clicked onto the stack: take keyboard focus back from
+  // the RX window / waterfall, so Enter carries on with the station in
+  // Call instead of pressing the call chip that was just clicked.
+  let lastQueueToken = 0;
+  $effect(() => {
+    const t = entryBus.queueToken;
+    if (t === lastQueueToken) return;
+    lastQueueToken = t;
+    queueMicrotask(() => (exchSent ? exchInput : callInput)?.focus());
   });
 
   // Put a callsign in the Call field as a fresh station (clicked spot,
-  // NEXT queue) and get ready for his exchange.
-  function loadCall(c: string) {
+  // stack) and get ready for his exchange — or, for a caller right-clicked
+  // into an empty Call, leave focus on Call so the next Enter sends him ours.
+  function loadCall(c: string, focus: "call" | "exch" = "exch") {
     noteCallChanged(c);
     call = c;
     exchRcvd = "";
@@ -278,7 +330,7 @@
     suggestions = [];
     suggestionIdx = -1;
     lookupHistory(c);
-    queueMicrotask(() => exchInput?.focus());
+    queueMicrotask(() => (focus === "call" ? callInput : exchInput)?.focus());
   }
 
   // An exchange word clicked in the decoder window. Builds the exchange a
@@ -579,14 +631,6 @@
       {#if dupe}
         <span class="dupe-flag">DUPE</span>
       {/if}
-      {#if entryBus.nextQueue.length}
-        <span class="next-q" title="Callers queued with right-click. ESM's TU step sends TU, logs, then loads the first one and sends him the exchange. Click a call to drop it.">
-          <span class="dim">next</span>
-          {#each entryBus.nextQueue as n}
-            <button type="button" class="next-chip" onclick={() => entryBus.dropNext(n)}>{n} ×</button>
-          {/each}
-        </span>
-      {/if}
       {#if liveNewMults.length}
         <span class="mult-chip" title="This station would be a new multiplier">NEW: {liveNewMults.join(" · ")}</span>
       {/if}
@@ -674,6 +718,23 @@
       Log it <span class="kbd">Ctrl+↵</span>
     </button>
   </div>
+
+  {#if !settings.spMode}
+    <div class="stack" class:active={entryBus.nextQueue.length > 0}>
+      <span
+        class="stack-label"
+        title="Right-click callers in the RX window or on the waterfall to stack them. With ESM, Enter at the TU step sends {settings.stackTuKey}: TU, log, then the next caller and our exchange. Click a call to drop it."
+      >Stack</span>
+      {#each entryBus.nextQueue as n, i}
+        <button type="button" tabindex="-1" onmousedown={(e) => e.preventDefault()} class="next-chip" class:first={i === 0} title="Drop {n} from the stack" onclick={() => entryBus.dropNext(n)}>{n} ×</button>
+      {:else}
+        <span class="stack-empty">empty — right-click callers to stack them</span>
+      {/each}
+      {#if entryBus.nextQueue.length > 1}
+        <button type="button" tabindex="-1" onmousedown={(e) => e.preventDefault()} class="stack-clear" onclick={() => entryBus.clearNext()}>clear</button>
+      {/if}
+    </div>
+  {/if}
 </section>
 
 <style>
@@ -749,7 +810,33 @@
     white-space: nowrap;
   }
 
-  .next-q { display: inline-flex; align-items: center; gap: 4px; }
+  .stack {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 6px;
+    margin-top: 10px;
+    padding: 4px 8px;
+    border: 1px dashed #2a3036;
+    border-radius: 4px;
+    font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+    font-size: 12px;
+  }
+  .stack.active { border: 1px solid #3a5a8a; background: #141d27; }
+  .stack-label { color: #8a949d; font-size: 10px; text-transform: uppercase; letter-spacing: 1px; font-weight: 600; }
+  .stack.active .stack-label { color: #92c5fa; }
+  .stack-empty { color: #4f565c; font-size: 11px; }
+  .stack-clear {
+    margin-left: auto;
+    background: none;
+    border: 1px solid #2a3036;
+    border-radius: 3px;
+    color: #8a949d;
+    font-size: 10px;
+    padding: 1px 6px;
+    cursor: pointer;
+  }
+  .stack-clear:hover { color: #f87171; border-color: #f87171; }
   .next-chip {
     background: #1c2a3a;
     border: 1px solid #3a5a8a;
@@ -757,9 +844,10 @@
     border-radius: 3px;
     padding: 1px 6px;
     font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
-    font-size: 11px;
+    font-size: 12px;
     cursor: pointer;
   }
+  .next-chip.first { font-weight: 700; border-color: #60a5fa; }
   .next-chip:hover { border-color: #f87171; color: #f87171; }
 
   .esm-chip {
@@ -840,8 +928,9 @@
     background: #0e1418;
   }
 
+  /* A size up from the other fields, and it follows the Entry font size. */
   .call-field input {
-    font-size: 22px;
+    font-size: calc(var(--win-size, 18px) * 1.22);
     font-weight: 600;
     letter-spacing: 1px;
   }

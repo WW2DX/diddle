@@ -65,6 +65,28 @@ pub struct RttyConfig {
     pub tx_mark_hz: f32,
     #[serde(default)]
     pub tx_space_hz: f32,
+    /// Squelch, 0–100: how clean a signal must look before the decoder
+    /// starts a character. 0 is wide open; higher keeps noise and weaker
+    /// signals out of the RX window. See `squelch_threshold`.
+    #[serde(default = "default_squelch")]
+    pub squelch: f32,
+}
+
+pub const DEFAULT_SQUELCH: f32 = 30.0;
+fn default_squelch() -> f32 {
+    DEFAULT_SQUELCH
+}
+
+/// Squelch setting → minimum tone contrast. Band noise averages 0.5 (its
+/// energy splits evenly between mark and space) and a copyable FSK signal
+/// 0.7–0.85, so 1–100 spans 0.5 (just above the noise average) to 0.8
+/// (strong, clean signals only). 0 turns the squelch off.
+fn squelch_threshold(sq: f32) -> f32 {
+    if sq <= 0.0 {
+        0.0
+    } else {
+        0.5 + 0.3 * sq.min(100.0) / 100.0
+    }
 }
 
 impl RttyConfig {
@@ -87,6 +109,7 @@ impl Default for RttyConfig {
             baud: 45.45,
             tx_mark_hz: 2125.0,
             tx_space_hz: 2295.0,
+            squelch: DEFAULT_SQUELCH,
         }
     }
 }
@@ -177,12 +200,17 @@ pub struct RttyDemod {
     // around the noise floor.
     last_bit: bool,
 
-    // Signal-presence tracking. We maintain a slowly-updated noise-floor
-    // estimate (only updated when the current sample looks like noise) and
-    // gate start-bit detection on current energy being well above that
-    // floor. This prevents the slicer from emitting random characters
-    // during silence or weak-signal gaps.
-    noise_floor: f32,
+    // Squelch. `contrast` is the discriminator's magnitude |disc| averaged
+    // over a few bits: an FSK signal puts its energy in one tone at a time
+    // (near 1), noise splits it evenly between the two (about 0.5). The
+    // idle state only accepts a start bit while it's above `gate`, which
+    // keeps noise and silence from printing as random characters. Unlike a
+    // noise-floor estimate it needs no history, so it's right from the
+    // first sample whatever the audio level, and a long transmission can't
+    // drag it up.
+    contrast: f32,
+    contrast_alpha: f32,
+    gate: f32,
 
     // Async-serial state machine.
     state: SerialState,
@@ -244,17 +272,10 @@ impl Phasor {
 // Lower hysteresis is OK now that AGC + bandpass clean up the noise
 // floor — the discriminator is much steadier, so 6% margin is enough.
 const HYST_THRESHOLD: f32 = 0.06;
-// Signal must be at least GATE_SNR times the noise-floor estimate for the
-// idle state to accept a start-bit transition. 6× ≈ +8 dB SNR.
-const GATE_SNR: f32 = 6.0;
-// Noise floor updates only when current sample is in the bottom of recent
-// observations — this is the "lower envelope" we expect noise to live at.
-const NOISE_FLOOR_UPDATE_RATIO: f32 = 2.0;
-// IIR coefficient for noise-floor tracking. ~1000 sample time constant
-// (~170 ms at 6 kHz): fast enough to adapt to noise after a transmission
-// ends, slow enough that brief silences inside a transmission don't drag
-// the floor up to signal level.
-const NOISE_FLOOR_ALPHA: f32 = 0.001;
+// Squelch contrast averaging time, in bits: long enough to steady the noise
+// reading (99th percentile 0.67 at 3 bits vs 0.77 at 1), short enough that
+// a station's first character still opens it.
+const CONTRAST_BITS: f32 = 3.0;
 // Bit-clock adjustment: each observed transition during a frame updates
 // the running samples-per-bit estimate with this weight. Small enough that
 // noise spikes can't yank the estimate around; large enough to settle in a
@@ -307,7 +328,9 @@ impl RttyDemod {
             space_q_sum: 0.0,
             buf_idx: 0,
             last_bit: true, // idle line is mark
-            noise_floor: 0.0,
+            contrast: 0.5,
+            contrast_alpha: 1.0 / (CONTRAST_BITS * spb),
+            gate: squelch_threshold(cfg.squelch),
             state: SerialState::Idle,
             sample_counter: 0.0,
             data_bits: 0,
@@ -382,14 +405,14 @@ impl RttyDemod {
         }
         let bit = self.last_bit;
 
-        // Adaptive noise-floor tracking. The floor only catches up when the
-        // current sample looks like noise (close to or below the existing
-        // estimate) — this avoids being pulled up by a sustained signal.
-        if self.noise_floor < 1.0e-9 || total < self.noise_floor * NOISE_FLOOR_UPDATE_RATIO {
-            self.noise_floor =
-                self.noise_floor * (1.0 - NOISE_FLOOR_ALPHA) + total * NOISE_FLOOR_ALPHA;
+        // Squelch (see `contrast`). It starts at the noise reading and
+        // holds still through digital silence (a virtual cable, the
+        // simulator with noise off), so a signal opens it within a bit
+        // either way.
+        if total > 1.0e-12 {
+            self.contrast += self.contrast_alpha * (disc.abs() - self.contrast);
         }
-        let signal_present = total > self.noise_floor * GATE_SNR;
+        let signal_present = self.gate == 0.0 || self.contrast > self.gate;
 
         // Async-serial framing. Sample at end of each bit (matched filter peak).
         match self.state {
@@ -536,6 +559,49 @@ mod silence_tests {
                 "silence={silence_s}s amp={amp}: got {out:?}"
             );
         }
+    }
+}
+
+#[cfg(test)]
+mod squelch_tests {
+    use super::*;
+    use crate::dsp::RttyTxGenerator;
+    use rand::{rngs::StdRng, Rng, SeedableRng};
+
+    fn decode(wave: &[f32], squelch: f32) -> String {
+        let cfg = RttyConfig { squelch, ..RttyConfig::default() };
+        let mut demod = RttyDemod::new(48_000, cfg);
+        wave.chunks(512).map(|c| demod.push(c)).collect()
+    }
+
+    /// Band noise alone prints junk with the squelch wide open; turned up,
+    /// the RX window stays quiet — and a clean signal still gets through.
+    #[test]
+    fn squelch_quiets_noise_not_signals() {
+        let sr = 48_000;
+        let mut rng = StdRng::seed_from_u64(7);
+        let noise: Vec<f32> = (0..sr * 10).map(|_| rng.gen_range(-0.3f32..0.3)).collect();
+        let open = decode(&noise, 0.0).trim().len();
+        let default = decode(&noise, DEFAULT_SQUELCH).trim().len();
+        let shut = decode(&noise, 60.0).trim().len();
+        assert!(open > 20, "open squelch should let noise through, got {open} chars");
+        assert!(default < open / 2, "default squelch: {default} chars vs {open} open");
+        assert!(shut <= 2, "squelch 60: {shut} chars of noise");
+
+        let mut gen = RttyTxGenerator::new(sr, 2125.0, 2295.0, 45.45);
+        let spb = gen.samples_per_bit();
+        let mut wave = vec![0.0f32; sr as usize / 2];
+        gen.next_samples((8.0 * spb) as usize, &mut wave);
+        gen.enqueue(" W1AW DE K6AC K6AC K ");
+        while !gen.is_idle() {
+            gen.next_samples(1, &mut wave);
+        }
+        gen.next_samples((4.0 * spb) as usize, &mut wave);
+        for s in wave.iter_mut() {
+            *s = *s * 0.5 + rng.gen_range(-0.01f32..0.01);
+        }
+        let out = decode(&wave, 60.0);
+        assert!(out.contains("DE K6AC K6AC K"), "got {out:?}");
     }
 }
 

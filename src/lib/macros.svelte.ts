@@ -24,7 +24,8 @@ const DEFAULT_MACROS: Macro[] = [
   { key: "F5", label: "Rpt",  text: "599 <SERIAL> 599 <SERIAL>" },
   { key: "F6", label: "?",    text: "PSE AGN ?" },
   { key: "F7", label: "BRK",  text: "BRK BRK <MYCALL>" },
-  { key: "F8", label: "73",   text: "73 DE <MYCALL>" },
+  // Stack TU: ESM sends it at the TU step when callers are stacked.
+  { key: "F8", label: "TU+Nxt", text: "TU <CALL><LOGIT> NOW<CRLF><POPSTACK><CALL> 599 <SERIAL> 599 <SERIAL>" },
   // Shift+F1..F8.
   { key: "SF1", label: "QRZ",   text: "QRZ? DE <MYCALL>" },
   { key: "SF2", label: "AGN",   text: "AGN AGN" },
@@ -135,18 +136,39 @@ class MacroState {
   /// Substitute macro tokens. Token names are case-insensitive — `<serial>`
   /// works the same as `<SERIAL>` — and anything unrecognized is left as
   /// typed rather than silently swallowed.
-  expand(template: string, ctx: { call?: string } = {}): string {
+  ///
+  /// Tokens are read left to right, so the action tokens change what
+  /// follows them:
+  ///   <CRLF>      a new line on the other station's screen
+  ///   <LOGIT>     log the QSO in the entry form (a later <SERIAL> is the
+  ///               next number)
+  ///   <POPSTACK>  load the next stacked caller; a later <CALL> is him
+  /// Actions only run with `act` — when the text really goes out — so
+  /// checking a macro for emptiness or previewing it has no side effects.
+  expand(template: string, ctx: { call?: string } = {}, act = false): string {
     // Fall back to the entry window's live Call field so macros fired from the
     // F-keys (ESM off, no per-QSO context) still resolve <CALL>.
-    const call = ctx.call || entryBus.currentCall || "";
-    const values: Record<string, string> = {
-      MYCALL: settings.myCall || "MYCALL",
-      CALL: call,
-      SERIAL: String(qsoLog.nextSerial).padStart(3, "0"),
-    };
+    let call = ctx.call || entryBus.currentCall || "";
     return template.replace(/<([A-Za-z]+)>/g, (tok, name: string) => {
-      const v = values[name.toUpperCase()];
-      return v === undefined ? tok : v;
+      switch (name.toUpperCase()) {
+        case "MYCALL":
+          return settings.myCall || "MYCALL";
+        case "CALL":
+          return call;
+        case "SERIAL":
+          return String(qsoLog.nextSerial).padStart(3, "0");
+        case "CRLF":
+          return "\n";
+        case "LOGIT":
+          if (act) entryBus.actions?.logIt();
+          return "";
+        case "POPSTACK":
+          if (act) call = entryBus.actions?.popStack() ?? "";
+          else call = entryBus.nextQueue[0] ?? "";
+          return "";
+        default:
+          return tok;
+      }
     });
   }
 
@@ -159,7 +181,7 @@ class MacroState {
   /// onto that transmission (the backend queues it). Tokens are expanded
   /// now, synchronously, so callers can change the entry form right after.
   async send(text: string, ctx: { call?: string } = {}): Promise<boolean> {
-    const expanded = this.expand(text, ctx);
+    const expanded = this.expand(text, ctx, true);
     if (expanded.trim().length === 0) return false;
     this.lastError = null;
     this.lastSent = expanded;

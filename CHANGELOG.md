@@ -5,6 +5,30 @@ All notable changes to Diddle are documented here. Format loosely follows
 
 ## [Unreleased]
 
+### Added
+- **Stack macros: `<CRLF>`, `<LOGIT>`, `<POPSTACK>`.** Tokens run left to right as the macro goes out: `<CRLF>` starts a new line, `<LOGIT>` logs the QSO in the entry form, and `<POPSTACK>` loads the next stacked caller, so a later `<CALL>` is him and a later `<SERIAL>` is the next number. They work from an F-key pressed by hand as well as from ESM.
+- **Stack box** under the entry fields in Run: the callers you've right-clicked, in order. Click one to drop it; *clear* empties it.
+- **Font list from the computer.** Each window's font is now picked from every font installed on the computer, fixed-pitch fonts first, and each one is shown in its own typeface.
+- **Test button for the new-multiplier chime** in Settings.
+- **Squelch** (SQ slider, RX decoder): how clean a signal must look before the RX window prints it. 0 is wide open; turn it up until the noise between signals stops printing. The default is 30 and the setting is remembered. It works on tone contrast (how much more of the energy is in one tone than the other) rather than level, so it behaves the same at any audio level. The bandmap's spot decoder isn't squelched.
+- **Radio RX filter: wide / 500 / 250** (RX decoder, over TCI). 500 and 250 are centred on the mark/space pair and follow it as you retune. *wide* puts back the filter the radio had before. A narrow filter also hides the rest of the band from the waterfall and bandmap, so it isn't remembered between launches.
+- **Radio AGC: norm / fast / off** (RX decoder, over TCI), with the receiver gain in dB shown when AGC is off. Diddle reads the radio's filter and AGC on connect, so the buttons show what the radio is set to.
+- **Call history: "Exch from" column** (Settings → Call history). *auto* keeps each contest's own fields and, for a contest with none (Generic, or one Diddle has no profile for, such as URC DX), uses `EXCH1`. A file headed `!!Order!!,Call,Exch1,UserText` then pre-fills Exch for any contest. Saved contest setups remember the choice.
+
+### Changed
+- **Stack (NEXT) flow redone** after feedback from the field. Right-click a caller into an empty Call and focus stays in Call, so Enter sends him the exchange. Right-click more callers and they go on the stack, and keyboard focus comes back to the entry window, so Enter still works the QSO you're on. At the TU step with callers stacked, ESM sends the stack-TU macro, **F8** by default (Settings → F-key macros): `TU <CALL><LOGIT> NOW<CRLF><POPSTACK><CALL> 599 <SERIAL> 599 <SERIAL>`. That's TU, log, then the next caller and your exchange, all in one transmission. The next Enter is the ordinary F3 TU. If the chosen macro has no `<POPSTACK>`, ESM sends TU, logs, then F2 to the next caller. **Existing setups keep their own F8**, so program it as above, or pick a different slot in Settings.
+- **The new-multiplier chime is now a bell**: two rising strikes that ring out for over a second, much louder than the old blip.
+- **"Slashed 0" is now "force slashed 0"**, and its tooltip explains what it does. It turns on a font's slashed-zero variant where the font has one. Unticking it can't take the slash out of a font whose zero is always slashed, such as Consolas (Windows' default monospace) or Menlo.
+
+- **CQ WW zone prediction uses the history file's state for US stations.** The call area is only a guess: a W4 in Kentucky, Tennessee or Alabama is zone 4, a W8 in West Virginia zone 5, a W7 in Montana or Wyoming zone 4.
+- **The Entry font size now applies to the Call field too.** It stays a size larger than the other fields.
+- **Bandmap columns widen with the font size**, so large fonts no longer overlap.
+
+### Fixed
+- **The RX window's noise gate never closed on live radio audio.** The decoder only started a character when the signal stood out from its noise-floor estimate. But when audio began with band noise (the usual case), that estimate stuck near zero and the gate stayed open, so noise printed as random characters. The new squelch replaces it.
+- **Right-clicking a caller took keyboard focus away from the entry window.** The next Enter then pressed the call that had just been right-clicked and replaced the station you were working.
+- **The contest simulator counts a stack TU as a finished QSO.** Before, it reported that the station had "left without a TU".
+
 ## [0.1.27] — 2026-10-01
 
 ### Added

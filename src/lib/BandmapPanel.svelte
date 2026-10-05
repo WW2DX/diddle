@@ -402,7 +402,7 @@
   .panel.docked .legend { flex-wrap: wrap; gap: 6px 10px; }
   .panel.docked .rows { flex: 1; min-height: 0; max-height: none; }
   .panel.docked .empty { flex: 1; }
-  .panel.docked .row { grid-template-columns: 14px 96px 90px 1fr 34px; gap: 8px; }
+  .panel.docked .row { grid-template-columns: 1.2em 8em 7.5em minmax(0, 1fr) 2.8em; gap: 8px; }
 
   .here {
     display: grid;
@@ -432,9 +432,10 @@
     background: #0c0e10;
   }
 
+  /* Columns in em, so they widen with the Bandmap font size. */
   .row {
     display: grid;
-    grid-template-columns: 14px 110px 100px 1fr 40px;
+    grid-template-columns: 1.2em 9.2em 8.4em minmax(0, 1fr) 3.4em;
     align-items: center;
     gap: 10px;
     background: transparent;
@@ -449,6 +450,8 @@
     border-bottom: 1px solid #161a1d;
   }
   .row:last-child { border-bottom: none; }
+  /* Never spill into the next column, whatever the font. */
+  .row > span { min-width: 0; overflow: hidden; white-space: nowrap; }
   .row:hover { background: #1c2024; }
   .row.worked { opacity: 0.8; }
 

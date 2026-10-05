@@ -54,4 +54,6 @@ rand = "0.8"
 # HTTP (for fetching MASTER.SCP from supercheckpartial.com). rustls-tls keeps
 # the build self-contained — no system OpenSSL needed on macOS/Linux/Windows.
 reqwest = { version = "0.12", default-features = false, features = ["rustls-tls"] }
+# Installed font families for the per-window font pickers.
+fontdb = "0.24"
 

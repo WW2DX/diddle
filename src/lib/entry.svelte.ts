@@ -19,24 +19,34 @@ class EntryBus {
   requestedExchWord = $state<string>("");
   exchToken = $state<number>(0);
 
-  setCall(c: string) {
+  /// Which entry field takes focus once the call is loaded.
+  requestedFocus: "call" | "exch" = "exch";
+
+  setCall(c: string, focus: "call" | "exch" = "exch") {
     this.requestedCall = c;
+    this.requestedFocus = focus;
     this.token++;
   }
 
-  /// NEXT queue (N1MM/WriteLog style): right-click callers while working
-  /// one; the first goes straight into Call if it's empty, the rest wait
-  /// here in the order clicked. ESM's TU step sends TU, logs, loads the
-  /// next one and sends it the exchange — one Enter per QSO.
+  /// The stack (N1MM/WriteLog "NEXT" callers): right-click callers while
+  /// working one; the first goes straight into Call if it's empty, the
+  /// rest wait here in the order clicked. In Run, ESM's TU step sends the
+  /// stack-TU macro (F8 by default), whose <LOGIT> logs the QSO and whose
+  /// <POPSTACK> loads the next caller for the rest of the message.
   nextQueue = $state<string[]>([]);
+  /// Bumped on every right-click so EntryWindow takes keyboard focus back
+  /// from the RX window / waterfall — otherwise Enter would land on the
+  /// call chip that was just right-clicked.
+  queueToken = $state<number>(0);
 
   queueNext(c: string) {
     const call = c.trim().toUpperCase();
     if (!call) return;
     if (!this.currentCall.trim()) {
-      this.setCall(call);
+      this.setCall(call, "call");
       return;
     }
+    this.queueToken++;
     if (call === this.currentCall.trim().toUpperCase() || this.nextQueue.includes(call)) return;
     this.nextQueue = [...this.nextQueue, call];
   }
@@ -50,6 +60,17 @@ class EntryBus {
   dropNext(c: string) {
     this.nextQueue = this.nextQueue.filter((x) => x !== c);
   }
+
+  clearNext() {
+    this.nextQueue = [];
+  }
+
+  /// Hooks EntryWindow installs for the <LOGIT> and <POPSTACK> macro
+  /// tokens, which act on the entry form mid-expansion.
+  /// logIt: log the QSO in the form; true if it was logged.
+  /// popStack: load the next stacked caller as a station we've sent our
+  /// exchange to; returns his call, or undefined when the stack is empty.
+  actions: { logIt(): boolean; popStack(): string | undefined } | null = null;
 
   /// The TU macro (F3) was sent by hand — EntryWindow logs the QSO in Run
   /// mode with ESM on, like the ESM Enter step does.

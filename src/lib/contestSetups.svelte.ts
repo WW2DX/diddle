@@ -15,6 +15,7 @@ export interface ContestSetup {
   contestId: string;
   macros: Macro[];
   historyPath: string;
+  historyField?: string; // history column for Exch ("" = auto)
   updated: number; // unix ms
 }
 
@@ -57,6 +58,7 @@ class ContestSetups {
       contestId: settings.activeContest,
       macros: macroState.macros.map((m) => ({ ...m })),
       historyPath: settings.historyPath,
+      historyField: settings.historyField,
       updated: Date.now(),
     };
   }
@@ -89,6 +91,7 @@ class ContestSetups {
     const same =
       a.contestId === snap.contestId &&
       a.historyPath === snap.historyPath &&
+      (a.historyField || "") === snap.historyField &&
       JSON.stringify(a.macros) === JSON.stringify(snap.macros);
     if (same) return;
     this.setups = this.setups.map((s) => (s.id === a.id ? { ...s, ...snap } : s));
@@ -104,6 +107,7 @@ class ContestSetups {
     settings.setActiveContest(s.contestId);
     macroState.replaceAll(s.macros);
     settings.setHistoryPath(s.historyPath || "");
+    settings.setHistoryField(s.historyField || "");
     this.save();
     return s;
   }

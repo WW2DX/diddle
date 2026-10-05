@@ -853,7 +853,7 @@
           style="left: {pct}%"
           onclick={(e) => pickSpotFromClick(e, o.source)}
           oncontextmenu={(e) => queueSpotFromClick(e, o.source)}
-          title={`${o.worked ? "DUPE — already worked on this band · " : ""}Click → load ${o.call} + QSY · right-click → queue as NEXT · ${o.source === "cluster" ? "cluster" : "decoded"} · ${o.audio_hz.toFixed(0)} Hz · ${new Date(o.timestamp_ms).toLocaleTimeString()}${o.comment ? " · " + o.comment : ""}`}
+          title={`${o.worked ? "DUPE — already worked on this band · " : ""}Click → load ${o.call} + QSY · right-click → add to the stack · ${o.source === "cluster" ? "cluster" : "decoded"} · ${o.audio_hz.toFixed(0)} Hz · ${new Date(o.timestamp_ms).toLocaleTimeString()}${o.comment ? " · " + o.comment : ""}`}
         >
           {o.call}
         </button>
