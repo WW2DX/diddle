@@ -151,13 +151,51 @@ pub async fn set_rtty_squelch(state: State<'_, AppState>, squelch: f32) -> Resul
 }
 
 #[tauri::command]
-pub async fn save_log(app: tauri::AppHandle, qsos: Vec<Qso>) -> Result<(), String> {
-    log_storage::save(&app, &qsos).await
+pub async fn log_list(app: tauri::AppHandle) -> Result<log_storage::LogList, String> {
+    log_storage::list(&log_storage::data_dir(&app)?).await
+}
+
+/// Open a log (no id = the one open last time) and make it the active one.
+#[tauri::command]
+pub async fn log_open(app: tauri::AppHandle, id: Option<String>) -> Result<log_storage::OpenLog, String> {
+    log_storage::open(&log_storage::data_dir(&app)?, id).await
 }
 
 #[tauri::command]
-pub async fn load_log(app: tauri::AppHandle) -> Result<Vec<Qso>, String> {
-    log_storage::load(&app).await
+pub async fn log_create(
+    app: tauri::AppHandle,
+    name: String,
+    contest_id: String,
+    qsos: Option<Vec<Qso>>,
+) -> Result<log_storage::OpenLog, String> {
+    log_storage::create(&log_storage::data_dir(&app)?, name, contest_id, qsos.unwrap_or_default()).await
+}
+
+#[tauri::command]
+pub async fn log_save(app: tauri::AppHandle, id: String, qsos: Vec<Qso>) -> Result<(), String> {
+    log_storage::save(&log_storage::data_dir(&app)?, &id, &qsos).await
+}
+
+#[tauri::command]
+pub async fn log_update_meta(
+    app: tauri::AppHandle,
+    id: String,
+    name: Option<String>,
+    contest_id: Option<String>,
+) -> Result<(), String> {
+    log_storage::update_meta(&log_storage::data_dir(&app)?, &id, name, contest_id).await
+}
+
+#[tauri::command]
+pub async fn log_delete(app: tauri::AppHandle, id: String) -> Result<(), String> {
+    log_storage::delete(&log_storage::data_dir(&app)?, &id).await
+}
+
+#[tauri::command]
+pub async fn read_file_text(path: String) -> Result<String, String> {
+    tokio::fs::read_to_string(&path)
+        .await
+        .map_err(|e| format!("read {path}: {e}"))
 }
 
 #[tauri::command]

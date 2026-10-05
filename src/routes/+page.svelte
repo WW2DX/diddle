@@ -90,6 +90,13 @@
     setZoom(zoom + (e.deltaY < 0 ? 0.05 : -0.05));
   }
 
+  // The open log remembers which contest it's for, so reopening it later
+  // brings the contest back (see Logbook).
+  $effect(() => {
+    const c = settings.activeContest;
+    if (qsoLog.loaded && settings.loaded) qsoLog.setContest(c);
+  });
+
   // Keep the active saved contest setup in step with live edits so
   // re-loading it later brings back exactly what was used.
   $effect(() => {
