@@ -5,6 +5,8 @@ All notable changes to Diddle are documented here. Format loosely follows
 
 ## [Unreleased]
 
+## [0.1.29] — 2026-10-05
+
 ### Added
 - **Named logs: one per contest, and any earlier one can be opened again.** The Logbook header has a log picker and **New log**, which starts an empty log for the contest you've picked (named, say, *CQ WW RTTY DX 2026-10-24*) and keeps the current one. **Logs…** lists every log with its contest, QSO count and dates. From there you can open an earlier log, rename the open one, or delete one (two clicks; the file is set aside, not erased). Opening a log brings its contest back, so the score, multipliers and Cabrillo export come out as they did. Exports are named after the log.
 - **Import ADIF into a new log** (Logs… → Import ADIF…). It reads Diddle's own exports, including ones edited afterwards, exchange and serials intact, as well as other loggers' ADIF. The contest comes from `CONTEST_ID` when the file has one.
