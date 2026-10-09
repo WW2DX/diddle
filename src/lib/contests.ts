@@ -96,6 +96,15 @@ export const CONTESTS: ContestProfile[] = [
     },
     historyExchange: (r) => [hf(r, "Name"), hf(r, "State", "Loc1")].filter(Boolean).join(" "),
   },
+  {
+    id: "makrothen-rtty",
+    name: "Makrothen RTTY",
+    cabrilloName: "MAKROTHEN-RTTY",
+    exchangeFormat: "Grid square (4 characters)",
+    rcvdPlaceholder: "FN31",
+    buildSent: () => (settings.myGrid.slice(0, 4) || "?").toUpperCase(),
+    historyExchange: (r) => hf(r, "Grid", "GridSquare", "Loc1", "Exch1").slice(0, 4),
+  },
 ];
 
 /// The received exchange a call-history record predicts. The column picked

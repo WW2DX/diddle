@@ -3,18 +3,8 @@
   import { open as openDialog } from "@tauri-apps/plugin-dialog";
   import { settings, FONT_WINS } from "$lib/settings.svelte";
   import { CONTESTS, activeContest } from "$lib/contests";
-  import {
-    scpAutoDownload,
-    scpLoadFile,
-    scpStatus,
-    historyLoadFile,
-    historyClear,
-    historyStatus,
-    listFonts,
-    type FontFamily,
-    type ScpStatus,
-    type CallHistoryStatus,
-  } from "$lib/tci";
+  import { listFonts, type FontFamily } from "$lib/tci";
+  import { scpFile, historyFile } from "$lib/lookupFiles.svelte";
   import { cluster } from "$lib/cluster.svelte";
   import { macroState, keyLabel } from "$lib/macros.svelte";
   import { contestSetups } from "$lib/contestSetups.svelte";
@@ -24,27 +14,13 @@
   // Show the format hint based on the current selection.
   let formatHint = $derived(activeContest().exchangeFormat);
 
-  let scp = $state<ScpStatus>({ count: 0, source: "" });
-  let scpLoading = $state(false);
-  let scpError = $state<string | null>(null);
-
-  // ---- N1MM-style call history (Exch prefill) ----
-  let hist = $state<CallHistoryStatus>({ count: 0, path: "", fields: [] });
-  let histLoading = $state(false);
-  let histError = $state<string | null>(null);
-
-  async function loadHistoryFromPath(path: string) {
-    histLoading = true;
-    histError = null;
-    try {
-      hist = await historyLoadFile(path);
-      settings.setHistoryPath(path);
-    } catch (e: any) {
-      histError = String(e);
-    } finally {
-      histLoading = false;
-    }
-  }
+  // SCP + call history live in lookupFiles (loaded at startup).
+  let scp = $derived(scpFile.status);
+  let scpLoading = $derived(scpFile.loading);
+  let scpError = $derived(scpFile.error);
+  let hist = $derived(historyFile.status);
+  let histLoading = $derived(historyFile.loading);
+  let histError = $derived(historyFile.error);
 
   async function pickHistoryFile() {
     const path = await openDialog({
@@ -53,7 +29,7 @@
       filters: [{ name: "Call history / text", extensions: ["txt", "csv", "hist"] }],
     });
     if (!path || typeof path !== "string") return;
-    await loadHistoryFromPath(path);
+    await historyFile.load(path);
   }
 
   async function pickCtyFile() {
@@ -64,16 +40,6 @@
     });
     if (!path || typeof path !== "string") return;
     await cty.loadFile(path);
-  }
-
-  async function clearHistory() {
-    histError = null;
-    try {
-      hist = await historyClear();
-      settings.setHistoryPath("");
-    } catch (e: any) {
-      histError = String(e);
-    }
   }
 
   // ---- Saved contest setups ----
@@ -92,10 +58,21 @@
       contestSetups.deactivate();
       return;
     }
-    const s = contestSetups.activate(id);
-    if (!s) return;
-    if (s.historyPath) await loadHistoryFromPath(s.historyPath);
-    else if (hist.count > 0) await clearHistory();
+    await contestSetups.activate(id);
+  }
+
+  // F-keys save as they're edited; the button makes it explicit (and
+  // writes them into the active setup straight away).
+  let macroSaveMsg = $state<string | null>(null);
+  let macroSaveTimer: ReturnType<typeof setTimeout> | null = null;
+  function saveMacros() {
+    const ok = macroState.save();
+    if (ok) contestSetups.syncActive();
+    macroSaveMsg = ok
+      ? `Saved ✓${activeSetup ? ` — also in setup “${activeSetup.name}”` : ""}`
+      : "Couldn't save — see the log";
+    if (macroSaveTimer) clearTimeout(macroSaveTimer);
+    macroSaveTimer = setTimeout(() => (macroSaveMsg = null), 4000);
   }
 
   function deleteSetup() {
@@ -113,57 +90,7 @@
     listFonts()
       .then((fs) => (fonts = fs))
       .catch((e) => console.error("listFonts failed", e));
-    try {
-      scp = await scpStatus();
-    } catch (e) {
-      console.error("scpStatus failed", e);
-    }
-    try {
-      hist = await historyStatus();
-    } catch (e) {
-      console.error("historyStatus failed", e);
-    }
-    if (settings.historyPath && hist.count === 0) {
-      await loadHistoryFromPath(settings.historyPath);
-    }
-    // Auto-reload the saved SCP file on startup so the user doesn't have
-    // to re-pick it every session.
-    if (settings.scpPath && scp.source === "starter") {
-      await loadScpFromPath(settings.scpPath);
-    } else if (!settings.scpPath && scp.source === "starter") {
-      // First launch with no SCP picked yet — pull MASTER.SCP from
-      // supercheckpartial.com so the operator has a full callsign database
-      // without having to find and download it by hand.
-      await autoDownloadScp();
-    }
   });
-
-  async function autoDownloadScp() {
-    scpLoading = true;
-    scpError = null;
-    try {
-      const result = await scpAutoDownload();
-      scp = result.status;
-      settings.setScpPath(result.path);
-    } catch (e: any) {
-      scpError = `Auto-download failed (using starter list): ${e}`;
-    } finally {
-      scpLoading = false;
-    }
-  }
-
-  async function loadScpFromPath(path: string) {
-    scpLoading = true;
-    scpError = null;
-    try {
-      scp = await scpLoadFile(path);
-      settings.setScpPath(path);
-    } catch (e: any) {
-      scpError = String(e);
-    } finally {
-      scpLoading = false;
-    }
-  }
 
   async function pickScpFile() {
     const path = await openDialog({
@@ -172,7 +99,7 @@
       filters: [{ name: "SCP / text", extensions: ["scp", "txt"] }],
     });
     if (!path || typeof path !== "string") return;
-    await loadScpFromPath(path);
+    await scpFile.load(path);
   }
 
   let clusterError = $state<string | null>(null);
@@ -305,7 +232,7 @@
       </span>
     </div>
     <div class="scp-actions">
-      <button onclick={autoDownloadScp} disabled={scpLoading}>
+      <button onclick={() => scpFile.autoDownload()} disabled={scpLoading}>
         {scpLoading ? "Working…" : "Update from web"}
       </button>
       <button class="ghost" onclick={pickScpFile} disabled={scpLoading}>
@@ -407,7 +334,7 @@
         {histLoading ? "Loading…" : "Load N1MM+ history file…"}
       </button>
       {#if hist.count > 0}
-        <button class="ghost" onclick={clearHistory}>Clear</button>
+        <button class="ghost" onclick={() => historyFile.clear()}>Clear</button>
       {/if}
       <label class="stack-key" title="Which history column goes into Exch. Auto uses the contest's own fields (zone + state for CQ WW, name + state for NAQP…), or EXCH1 for a contest with none — so a file headed !!Order!!,Call,Exch1,UserText works for any contest.">
         Exch from
@@ -571,7 +498,11 @@
       <span class="scp-label">F-key macros</span>
       <span class="hint">
         <span class="mono">&lt;MYCALL&gt;</span>
-        <span class="mono">&lt;CALL&gt;</span>
+        <span class="mono">&lt;NAME&gt;</span>
+        <span class="mono">&lt;STATE&gt;</span>
+        <span class="mono">&lt;CQZONE&gt;</span>
+        <span class="mono">&lt;GRID&gt;</span> (yours, from above; grid as 4 characters)
+        <span class="mono">&lt;CALL&gt;</span> (his)
         <span class="mono">&lt;SERIAL&gt;</span> are substituted at send time (case doesn't matter).
         <span class="mono">&lt;CRLF&gt;</span> new line ·
         <span class="mono">&lt;LOGIT&gt;</span> log the QSO ·
@@ -630,6 +561,14 @@
           </button>
         </div>
       {/each}
+    </div>
+    <div class="macro-save">
+      <button class="cluster-btn" onclick={saveMacros}>Save F-keys</button>
+      {#if macroSaveMsg}
+        <span class="saved">{macroSaveMsg}</span>
+      {:else}
+        <span class="hint">Saved as you type{activeSetup ? `, and into the setup “${activeSetup.name}”` : ""} — this confirms it.</span>
+      {/if}
     </div>
   </div>
 </section>
@@ -875,6 +814,8 @@
   .macros-head .hint {
     flex: 1;
   }
+  .macro-save { display: flex; align-items: center; gap: 10px; margin-top: 8px; }
+  .macro-save .saved { color: #4ade80; font-size: 12px; }
   .stack-key { display: flex; align-items: center; gap: 6px; white-space: nowrap; color: #8a949d; font-size: 12px; }
   .macros-head .mono {
     color: #c5d1de;

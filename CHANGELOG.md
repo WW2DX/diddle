@@ -5,6 +5,21 @@ All notable changes to Diddle are documented here. Format loosely follows
 
 ## [Unreleased]
 
+### Added
+- **Makrothen RTTY.** The exchange is your 4-character grid (Settings → operator + contest). Points are the distance between grid-square centres in whole km, using the rules' formula and earth radius, times 2 on 80m and 1.5 on 40m, rounded down. Same square scores 100. A station counts once per band. The Cabrillo `QSO:` lines carry both grids, and ADIF gets `GRIDSQUARE` / `MY_GRIDSQUARE`.
+- **Macros for your station details:** `<NAME>`, `<STATE>`, `<CQZONE>` (or `<ZONE>`) and `<GRID>` (4 characters), alongside `<MYCALL>`.
+- **Save F-keys** button under the F-key editor. F-keys already save as you type; the button confirms it and writes them into the active saved setup.
+- **New log asks what it's for:** a contest, or a saved setup (contest + F-keys + call history file). The name follows your pick until you type over it.
+
+### Changed
+- **A log remembers its saved setup as well as its contest.** Opening a log brings both back. A setup made for a different contest is set aside rather than quietly rewritten to the log's contest. So the order is simply: pick the log, and the contest and F-keys follow.
+- **The Score line names its multipliers**, e.g. `412 pts × 230 Prefixes` or `(40 Zones + 98 Ctys + 52 St/Pr)`.
+- **ADIF import fills in the exchange from separate fields** when a file has no `SRX_STRING`: zone + state for CQ WW, name + state for NAQP, the grid for Makrothen, and serial and/or state/province otherwise (Roundup). This covers N1MM+ and WriteLog exports that split the exchange up.
+
+### Fixed
+- **With large fonts the Entry fields ran off under the bandmap.** That made the whole window wider than the screen, and focusing a field (as starting the simulator does) scrolled it sideways and cut off the left edge. The fields now shrink to fit and *Log it* wraps underneath. Nothing in the operating column can widen the window any more, and the Log table scrolls sideways instead.
+- **The call-history and SCP files weren't reloaded at startup unless Settings was opened.** Exch pre-fill quietly did nothing until then. Both now load at startup, and switching a saved setup (from Settings or New log) loads its history file.
+
 ## [0.1.29] — 2026-10-05
 
 ### Added

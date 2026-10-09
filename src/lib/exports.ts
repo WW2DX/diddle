@@ -75,6 +75,8 @@ export function toAdif(qsos: Qso[]): string {
     }
     if (p.serial !== undefined) parts.push(adifField("SRX", String(p.serial)));
     if (p.name) parts.push(adifField("NAME", p.name));
+    if (p.grid) parts.push(adifField("GRIDSQUARE", p.grid));
+    if (settings.myGrid) parts.push(adifField("MY_GRIDSQUARE", settings.myGrid.toUpperCase()));
     if (settings.activeContest === "wpx-rtty") parts.push(adifField("PFX", wpxPrefix(q.call)));
     if (/^(generic|wpx-rtty|rtty-roundup)$/.test(settings.activeContest)) {
       parts.push(adifField("STX", String(q.serialSent)));
@@ -127,7 +129,11 @@ function cabSide(call: string, rst: string, exch: string, serial: number, isMine
       const loc = (isMine ? settings.myState : toks[toks.length - 1]) || "";
       return `${c} ${name.padEnd(10, " ")} ${loc.padEnd(3, " ")}`;
     }
-    case "wpx-rtty":
+    case "makrothen-rtty": {
+      const grid = isMine ? settings.myGrid.slice(0, 4).toUpperCase() : p.grid || exch.trim().slice(0, 4);
+      return `${c} ${grid.padEnd(4, " ")}`;
+    }
+        case "wpx-rtty":
     case "generic": {
       const n = isMine ? serial : p.serial;
       return `${c} ${r} ${String(n ?? "").padStart(4, " ")}`;

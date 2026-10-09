@@ -89,12 +89,16 @@ class MacroState {
     this.loaded = true;
   }
 
-  private save() {
-    if (!this.loaded) return;
+  /// Write the macros out. Edits already call this as you type; the
+  /// F-key Save button calls it too, to confirm. True once written.
+  save(): boolean {
+    if (!this.loaded) return false;
     try {
       localStorage.setItem(STORE_KEY, JSON.stringify(this.macros));
+      return true;
     } catch (e) {
       console.error("macros.save failed", e);
+      return false;
     }
   }
 
@@ -153,6 +157,17 @@ class MacroState {
       switch (name.toUpperCase()) {
         case "MYCALL":
           return settings.myCall || "MYCALL";
+        // The rest of Settings → operator + contest.
+        case "NAME":
+          return settings.myName;
+        case "STATE":
+          return settings.myState;
+        case "CQZONE":
+        case "ZONE":
+          return settings.myZone;
+        case "GRID":
+          // Four characters, the way contests exchange it.
+          return settings.myGrid.slice(0, 4);
         case "CALL":
           return call;
         case "SERIAL":

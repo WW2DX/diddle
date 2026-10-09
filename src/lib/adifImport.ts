@@ -58,6 +58,26 @@ function adifTs(date: string, time: string): number | null {
   return Number.isNaN(ts) ? null : ts;
 }
 
+// The received exchange from per-part fields (N1MM+, WriteLog…), in the
+// order the contest sends it. Location: state, province or ARRL section.
+function receivedFromParts(r: Record<string, string>, contest: string): string {
+  const loc = r.STATE || r.VE_PROV || r.ARRL_SECT || "";
+  const parts = (() => {
+    switch (contest.trim().toUpperCase()) {
+      case "CQ-WW-RTTY":
+        return [r.CQZ || r.SRX, loc];
+      case "NAQP-RTTY":
+        return [r.NAME, loc];
+      case "MAKROTHEN-RTTY":
+        return [r.GRIDSQUARE];
+      default:
+        // Serial and/or location (Roundup: state/province, or serial for DX).
+        return [r.SRX, loc];
+    }
+  })();
+  return parts.filter((v) => v && v.trim()).join(" ");
+}
+
 export function importAdif(text: string, bandFromHz: (hz: number) => string): AdifImport {
   const out: Qso[] = [];
   let skipped = 0;
@@ -73,10 +93,10 @@ export function importAdif(text: string, bandFromHz: (hz: number) => string): Ad
     const mhz = parseFloat(r.FREQ || "");
     const freqHz = Number.isFinite(mhz) ? Math.round(mhz * 1_000_000) : 0;
     const band = freqHz ? bandFromHz(freqHz) : (r.BAND || "").trim().toLowerCase() || "—";
-    // Diddle writes the whole exchange to STX_STRING / SRX_STRING; other
-    // loggers often only have the serial in STX / SRX.
+    // Diddle writes the whole exchange to STX_STRING / SRX_STRING. Other
+    // loggers split it over separate fields, so build it from those.
     const exchSent = (r.STX_STRING || r.STX || "").trim();
-    const exchRcvd = (r.SRX_STRING || r.SRX || "").trim();
+    const exchRcvd = (r.SRX_STRING || receivedFromParts(r, r.CONTEST_ID || contestId)).trim();
     const serial = parseInt(r.APP_DIDDLE_SERIAL || r.STX || "", 10);
     out.push({
       id: crypto.randomUUID(),

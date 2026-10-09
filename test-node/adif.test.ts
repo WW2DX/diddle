@@ -57,3 +57,14 @@ test("QSOs without a serial are numbered after the rest", () => {
   const r = importAdif(adi, band);
   assert.deepEqual(r.qsos.map((q) => [q.call, q.serialSent]), [["K2B", 7], ["K1A", 8]]);
 });
+
+test("exchange built from per-part fields when there's no SRX_STRING", () => {
+  const ru = `<EOH><CALL:4>W1AW<QSO_DATE:8>20250104<TIME_ON:4>1800<CONTEST_ID:9>ARRL-RTTY<STATE:2>CT<EOR>
+<CALL:5>DL1AB<QSO_DATE:8>20250104<TIME_ON:4>1801<CONTEST_ID:9>ARRL-RTTY<SRX:3>123<EOR>
+<CALL:5>VE3XX<QSO_DATE:8>20250104<TIME_ON:4>1802<CONTEST_ID:9>ARRL-RTTY<VE_PROV:2>ON<EOR>`;
+  assert.deepEqual(importAdif(ru, band).qsos.map((q) => q.exchRcvd), ["CT", "123", "ON"]);
+  const ww = `<EOH><CALL:4>K1AR<QSO_DATE:8>20250927<TIME_ON:4>0001<CONTEST_ID:10>CQ-WW-RTTY<CQZ:1>5<STATE:2>MA<EOR>`;
+  assert.equal(importAdif(ww, band).qsos[0].exchRcvd, "5 MA");
+  const nq = `<EOH><CALL:4>K1AR<QSO_DATE:8>20250927<TIME_ON:4>0001<CONTEST_ID:9>NAQP-RTTY<NAME:4>JOHN<STATE:2>MA<EOR>`;
+  assert.equal(importAdif(nq, band).qsos[0].exchRcvd, "JOHN MA");
+});

@@ -52,6 +52,7 @@ export interface ParsedExch {
   serial?: number;
   name?: string;
   dx?: boolean; // sent "DX" or is outside W/VE
+  grid?: string; // 4-character Maidenhead locator
 }
 
 const RST = /^(5[1-9][1-9]|5NN|59|5N)$/;
@@ -87,10 +88,58 @@ export function parseExchange(contestId: string, exch: string, hit: CtyHit | nul
       }
       break;
     }
+    case "makrothen-rtty": {
+      const g = toks.find((t) => /^[A-R]{2}\d{2}([A-X]{2})?$/.test(t));
+      if (g) out.grid = g.slice(0, 4);
+      break;
+    }
     default:
       if (num) out.serial = parseInt(num, 10);
   }
   return out;
+}
+
+// ---- Grid distance (Makrothen) ----
+
+/// Centre of a 4-character Maidenhead square (6-character locators are
+/// cut to their square), as [lat, lon] in degrees; null if malformed.
+export function gridCentre(grid: string): [number, number] | null {
+  const g = grid.trim().toUpperCase().slice(0, 4);
+  if (!/^[A-R]{2}\d{2}$/.test(g)) return null;
+  const lon = (g.charCodeAt(0) - 65) * 20 - 180 + Number(g[2]) * 2 + 1;
+  const lat = (g.charCodeAt(1) - 65) * 10 - 90 + Number(g[3]) + 0.5;
+  return [lat, lon];
+}
+
+/// Great-circle distance between two grid squares' centres in km, with
+/// the Makrothen rules' formula and earth radius (6378.16 km).
+export function gridDistanceKm(a: string, b: string): number | null {
+  const p = gridCentre(a);
+  const q = gridCentre(b);
+  if (!p || !q) return null;
+  const r = Math.PI / 180;
+  const [a1, b1, a2, b2] = [p[0] * r, p[1] * r, q[0] * r, q[1] * r];
+  const c =
+    Math.cos(a1) * Math.cos(b1) * Math.cos(a2) * Math.cos(b2) +
+    Math.cos(a1) * Math.sin(b1) * Math.cos(a2) * Math.sin(b2) +
+    Math.sin(a1) * Math.sin(a2);
+  // Rounding can push the same point a hair past 1.
+  return Math.acos(Math.min(1, Math.max(-1, c))) * 6378.16;
+}
+
+const MAKROTHEN_BAND_FACTOR: Record<string, number> = {
+  "80m": 2, "40m": 1.5, "20m": 1, "15m": 1, "10m": 1,
+};
+
+/// Makrothen QSO points: whole km between the squares, times the band
+/// factor, rounded down; 100 flat in the same square; 0 without both
+/// grids or off the contest bands.
+export function makrothenPoints(myGrid: string, hisGrid: string, band: string): number {
+  const factor = MAKROTHEN_BAND_FACTOR[band];
+  const d = gridDistanceKm(myGrid, hisGrid);
+  if (!factor || d === null) return 0;
+  if (myGrid.trim().toUpperCase().slice(0, 4) === hisGrid.trim().toUpperCase().slice(0, 4)) return 100;
+  return Math.floor(Math.floor(d) * factor);
 }
 
 /// WPX prefix: letters and digits up to and including the last digit of
@@ -122,9 +171,14 @@ export interface MultKind {
   perBand: boolean;
 }
 
+/// What scoring needs from Settings beyond the country file.
+export interface ScoreCtx {
+  myGrid?: string;
+}
+
 export interface ContestRules {
   kinds: MultKind[];
-  points(my: CtyHit | null, his: CtyHit | null, band: string): number;
+  points(my: CtyHit | null, his: CtyHit | null, band: string, p: ParsedExch, ctx: ScoreCtx): number;
   /// The multiplier values this QSO carries, by kind ("" / undefined = none).
   mults(q: ScoreQso, his: CtyHit | null, p: ParsedExch): Record<string, string | undefined>;
 }
@@ -187,7 +241,7 @@ const RULES: Record<string, ContestRules> = {
     },
   },
   "wpx-rtty": {
-    kinds: [{ key: "prefix", label: "Pfx", perBand: false }],
+    kinds: [{ key: "prefix", label: "Prefixes", perBand: false }],
     points(my, his, band) {
       const low = LOW_BANDS.has(band);
       if (!my || !his) return 1;
@@ -197,6 +251,12 @@ const RULES: Record<string, ContestRules> = {
     mults(q) {
       return { prefix: wpxPrefix(q.call) };
     },
+  },
+  // Points by distance between grid squares; no multipliers.
+  "makrothen-rtty": {
+    kinds: [],
+    points: (_my, _his, band, p, ctx) => makrothenPoints(ctx.myGrid ?? "", p.grid ?? "", band),
+    mults: () => ({}),
   },
 };
 
@@ -233,10 +293,12 @@ export class MultTracker {
   readonly contestId: string;
   private lookup: Lookup;
   private my: CtyHit | null;
-  constructor(contestId: string, lookup: Lookup, my: CtyHit | null) {
+  private ctx: ScoreCtx;
+  constructor(contestId: string, lookup: Lookup, my: CtyHit | null, ctx: ScoreCtx = {}) {
     this.contestId = contestId;
     this.lookup = lookup;
     this.my = my;
+    this.ctx = ctx;
     this.rules = rulesFor(contestId);
   }
 
@@ -280,7 +342,7 @@ export class MultTracker {
         added.push({ kind: k.key, value: v });
       }
     }
-    return { points: this.rules.points(this.my, his, q.band), added };
+    return { points: this.rules.points(this.my, his, q.band, p, this.ctx), added };
   }
 }
 
@@ -298,8 +360,14 @@ function describe(kind: string, value: string, his: CtyHit | null): string {
 }
 
 /// Full score for a log.
-export function scoreLog(contestId: string, qsos: ScoreQso[], lookup: Lookup, my: CtyHit | null): Score {
-  const t = new MultTracker(contestId, lookup, my);
+export function scoreLog(
+  contestId: string,
+  qsos: ScoreQso[],
+  lookup: Lookup,
+  my: CtyHit | null,
+  ctx: ScoreCtx = {},
+): Score {
+  const t = new MultTracker(contestId, lookup, my, ctx);
   const kinds = t.rules.kinds;
   const bands = new Map<string, BandRow>();
   const totals: Record<string, number> = Object.fromEntries(kinds.map((k) => [k.key, 0]));

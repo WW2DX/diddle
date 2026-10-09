@@ -14,13 +14,17 @@ class ScoreStore {
 
   score = $derived.by<Score>(() => {
     cty.db; // recompute when the country file changes
-    return scoreLog(settings.activeContest, qsoLog.qsos, this.lookup, this.my);
+    return scoreLog(settings.activeContest, qsoLog.qsos, this.lookup, this.my, {
+      myGrid: settings.myGrid,
+    });
   });
 
   // Everything logged so far, for "would this be a new mult?" questions.
   private tracker = $derived.by(() => {
     cty.db;
-    const t = new MultTracker(settings.activeContest, this.lookup, this.my);
+    const t = new MultTracker(settings.activeContest, this.lookup, this.my, {
+      myGrid: settings.myGrid,
+    });
     for (const q of qsoLog.qsos) t.add(q);
     return t;
   });

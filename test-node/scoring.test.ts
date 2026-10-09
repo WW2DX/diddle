@@ -2,7 +2,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { CtyDb } from "../src/lib/cty.ts";
-import { parseExchange, scoreLog, wpxPrefix, MultTracker } from "../src/lib/scoring.ts";
+import { parseExchange, scoreLog, wpxPrefix, MultTracker, gridDistanceKm, makrothenPoints } from "../src/lib/scoring.ts";
 
 const db = CtyDb.parse(readFileSync(new URL("../static/cty.dat", import.meta.url), "utf8"));
 const lookup = (c: string) => db.lookup(c);
@@ -70,4 +70,35 @@ test("WPX: prefixes once, low bands double", () => {
   assert.equal(s.points, 10);
   assert.deepEqual(s.mults, { prefix: 2 });
   assert.equal(s.score, 20);
+});
+
+test("Makrothen: grid distance, band factors, same square", () => {
+  // The worked example from the rules: CM87 ↔ EL49.
+  const d = gridDistanceKm("CM87", "EL49")!;
+  assert.ok(Math.abs(d - 3084.2234824787) < 1e-6, String(d));
+  assert.equal(makrothenPoints("CM87", "EL49", "20m"), 3084);
+  assert.equal(makrothenPoints("CM87", "EL49", "15m"), 3084);
+  assert.equal(makrothenPoints("CM87", "EL49", "40m"), 4626);
+  assert.equal(makrothenPoints("CM87", "EL49", "80m"), 6168);
+  // 6-character locators count as their square; same square is 100 flat.
+  assert.equal(makrothenPoints("cm87wj", "CM87", "80m"), 100);
+  // No grid, or off the contest bands: nothing.
+  assert.equal(makrothenPoints("CM87", "", "20m"), 0);
+  assert.equal(makrothenPoints("CM87", "EL49", "160m"), 0);
+
+  // Whole-log score: points summed, no multipliers, one QSO per band.
+  const s = scoreLog(
+    "makrothen-rtty",
+    [
+      { call: "K4XYZ", band: "20m", exchRcvd: "EL49" },
+      { call: "K4XYZ", band: "40m", exchRcvd: "EL49" },
+      { call: "K4XYZ", band: "40m", exchRcvd: "EL49" }, // dupe
+    ],
+    () => null,
+    null,
+    { myGrid: "CM87" },
+  );
+  assert.equal(s.points, 3084 + 4626);
+  assert.equal(s.score, 3084 + 4626);
+  assert.equal(s.dupes, 1);
 });

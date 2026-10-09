@@ -10,6 +10,7 @@ export interface LogMeta {
   id: string;
   name: string;
   contestId: string; // "" = not recorded
+  setupId: string; // saved contest setup used with it, "" = none
   created: number;
 }
 
@@ -76,10 +77,10 @@ class QsoLog {
   }
 
   /// Start a new log (empty, or holding imported QSOs) and open it.
-  async create(name: string, contestId: string, qsos: Qso[] = []): Promise<boolean> {
+  async create(name: string, contestId: string, setupId = "", qsos: Qso[] = []): Promise<boolean> {
     await this.saveChain;
     try {
-      this.apply(await invoke<OpenLog>("log_create", { name, contestId, qsos }));
+      this.apply(await invoke<OpenLog>("log_create", { name, contestId, setupId, qsos }));
       await this.refreshLogs();
       return true;
     } catch (e) {
@@ -99,9 +100,21 @@ class QsoLog {
     await this.updateMeta(this.meta.id, { contestId });
   }
 
-  private async updateMeta(id: string, patch: { name?: string; contestId?: string }) {
+  /// Record which saved setup the open log is used with.
+  async setSetup(setupId: string) {
+    if (!this.meta || this.meta.setupId === setupId) return;
+    this.meta = { ...this.meta, setupId };
+    await this.updateMeta(this.meta.id, { setupId });
+  }
+
+  private async updateMeta(id: string, patch: { name?: string; contestId?: string; setupId?: string }) {
     try {
-      await invoke("log_update_meta", { id, name: patch.name ?? null, contestId: patch.contestId ?? null });
+      await invoke("log_update_meta", {
+        id,
+        name: patch.name ?? null,
+        contestId: patch.contestId ?? null,
+        setupId: patch.setupId ?? null,
+      });
       if (this.meta?.id === id && patch.name) this.meta = { ...this.meta, name: patch.name.trim() };
       await this.refreshLogs();
     } catch (e) {

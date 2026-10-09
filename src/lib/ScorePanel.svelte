@@ -9,6 +9,12 @@
   let contest = $derived(activeContest());
   let perBand = $derived(s.kinds.filter((k) => k.perBand));
   let once = $derived(s.kinds.filter((k) => !k.perBand));
+  // "123 Prefixes", or "(40 Zones + 98 Ctys + 52 St/Pr)" — each kind named,
+  // so the multiplier count is never just a bare number.
+  let multBreakdown = $derived.by(() => {
+    const parts = s.kinds.map((k) => `${s.mults[k.key].toLocaleString()} ${k.label}`);
+    return parts.length > 1 ? `(${parts.join(" + ")})` : parts[0] ?? "";
+  });
 </script>
 
 <section class="panel">
@@ -16,7 +22,9 @@
     <h2>Score <span class="dim">· {contest.name}</span></h2>
     <div class="total">
       {#if s.kinds.length}
-        <span class="dim">{s.points.toLocaleString()} pts × {s.totalMults} mults =</span>
+        <span class="dim">{s.points.toLocaleString()} pts × {multBreakdown} =</span>
+      {:else if s.qsos}
+        <span class="dim">{s.points.toLocaleString()} pts =</span>
       {/if}
       <span class="score">{s.score.toLocaleString()}</span>
     </div>
@@ -60,7 +68,7 @@
     {#if once.length}
       <div class="once">
         {#each once as k}
-          <span><span class="dim">{k.label}</span> {s.mults[k.key]}</span>
+          <span class="once-kind"><span class="dim">{k.label}</span> <b>{s.mults[k.key]}</b></span>
         {/each}
         <span class="dim">(counted once per contest)</span>
       </div>

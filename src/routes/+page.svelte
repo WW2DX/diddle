@@ -14,6 +14,7 @@
   import BandmapPanel from "$lib/BandmapPanel.svelte";
   import ScorePanel from "$lib/ScorePanel.svelte";
   import { cty } from "$lib/ctyStore.svelte";
+  import { scpFile, historyFile } from "$lib/lookupFiles.svelte";
   import type { RigState } from "$lib/tci";
   import { qsoLog } from "$lib/qsoLog.svelte";
   import { spots } from "$lib/spots.svelte";
@@ -96,6 +97,10 @@
     const c = settings.activeContest;
     if (qsoLog.loaded && settings.loaded) qsoLog.setContest(c);
   });
+  $effect(() => {
+    const id = contestSetups.activeId;
+    if (qsoLog.loaded && contestSetups.loaded) qsoLog.setSetup(id);
+  });
 
   // Keep the active saved contest setup in step with live edits so
   // re-loading it later brings back exactly what was used.
@@ -113,6 +118,9 @@
     contestSetups.load();
     qsoLog.load();
     cty.load();
+    // SCP + call history files, whether or not Settings is ever opened.
+    scpFile.init();
+    historyFile.init();
     spots.init();
     cluster.init();
 
@@ -210,7 +218,11 @@
     gap: 12px;
     align-items: start;
   }
-  .ops { min-width: 0; }
+  /* Nothing in the operating column may make the page wider than the
+     window: a too-wide panel would slide under the bandmap, and focusing a
+     field off to the right would scroll the whole window sideways, cutting
+     off its left edge. `clip` (not `hidden`) can't be scrolled at all. */
+  .ops { min-width: 0; overflow-x: clip; }
   .bm-resize {
     position: absolute;
     left: -9px;

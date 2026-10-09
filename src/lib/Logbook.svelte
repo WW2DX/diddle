@@ -3,7 +3,8 @@
   import { tick } from "svelte";
   import { invoke } from "@tauri-apps/api/core";
   import { save as saveDialog, open as openDialog } from "@tauri-apps/plugin-dialog";
-  import { qsoLog, type LogInfo } from "$lib/qsoLog.svelte";
+  import { qsoLog, type LogInfo, type LogMeta } from "$lib/qsoLog.svelte";
+  import { contestSetups } from "$lib/contestSetups.svelte";
   import { CONTESTS, activeContest } from "$lib/contests";
   import { importAdif } from "$lib/adifImport";
   import { bandFromHz, fmtMhz } from "$lib/bands";
@@ -143,10 +144,47 @@
   let confirmClear = $state(false);
   let clearTimer: ReturnType<typeof setTimeout> | null = null;
 
+  // New log: what it's for — a saved setup ("s:<id>": contest + F-keys +
+  // history file) or just a contest ("c:<id>"). The name follows the pick
+  // until it's typed over.
+  let newFor = $state("");
+  let nameTyped = $state(false);
+  function forLabel(v: string): string {
+    if (v.startsWith("s:")) return contestSetups.setups.find((x) => x.id === v.slice(2))?.name ?? "";
+    return contestName(v.slice(2));
+  }
+  function contestOfFor(v: string): string {
+    if (v.startsWith("s:")) return contestSetups.setups.find((x) => x.id === v.slice(2))?.contestId ?? settings.activeContest;
+    return v.slice(2);
+  }
+  function onForChange(v: string) {
+    newFor = v;
+    if (!nameTyped) nameValue = `${forLabel(v)} ${ymd(Date.now())}`;
+  }
+
+  // Make the contest, F-keys and history file match a log: its saved setup
+  // if it has one, otherwise its contest — and a setup made for another
+  // contest is set aside rather than rewritten to this one.
+  async function applyLogContext(meta: LogMeta) {
+    const setup = meta.setupId && contestSetups.setups.find((x) => x.id === meta.setupId);
+    if (setup) {
+      if (contestSetups.activeId !== setup.id) await contestSetups.activate(setup.id);
+      return;
+    }
+    const contest = meta.contestId || settings.activeContest;
+    if (contestSetups.active && contestSetups.active.contestId !== contest) contestSetups.deactivate();
+    if (contest !== settings.activeContest) settings.setActiveContest(contest);
+  }
+
   async function startNaming(kind: "new" | "rename") {
     naming = kind;
-    nameValue =
-      kind === "new" ? `${activeContest().name} ${ymd(Date.now())}` : qsoLog.meta?.name ?? "";
+    nameTyped = false;
+    if (kind === "new") {
+      newFor = contestSetups.activeId ? `s:${contestSetups.activeId}` : `c:${settings.activeContest}`;
+      nameValue = `${forLabel(newFor)} ${ymd(Date.now())}`;
+    } else {
+      nameValue = qsoLog.meta?.name ?? "";
+    }
     await tick();
     nameInputEl?.focus();
     nameInputEl?.select();
@@ -156,8 +194,13 @@
     const n = nameValue.trim();
     if (!n) return;
     if (naming === "new") {
-      if (await qsoLog.create(n, settings.activeContest)) {
-        exportMsg = `New log "${n}" — ${activeContest().name}`;
+      // Create first, then switch contest/setup: the switch is recorded on
+      // the open log, which must already be the new one.
+      const setupId = newFor.startsWith("s:") ? newFor.slice(2) : "";
+      const contest = contestOfFor(newFor);
+      if (await qsoLog.create(n, contest, setupId)) {
+        if (qsoLog.meta) await applyLogContext(qsoLog.meta);
+        exportMsg = `New log "${n}" — ${contestName(contest)}${setupId ? ` · setup “${forLabel(newFor)}”` : ""}`;
       }
     } else if (naming === "rename" && qsoLog.meta) {
       await qsoLog.rename(qsoLog.meta.id, n);
@@ -180,9 +223,7 @@
   async function openLog(id: string) {
     cancelEdit();
     const meta = await qsoLog.open(id);
-    if (meta?.contestId && meta.contestId !== settings.activeContest) {
-      settings.setActiveContest(meta.contestId);
-    }
+    if (meta) await applyLogContext(meta);
     pendingDeleteId = null;
   }
 
@@ -215,8 +256,8 @@
         CONTESTS.find((c) => c.cabrilloName && c.cabrilloName === r.contestId.toUpperCase())?.id ??
         settings.activeContest;
       const name = String(path).split(/[\\/]/).pop()!.replace(/\.[^.]+$/, "");
-      if (await qsoLog.create(name, contest, r.qsos)) {
-        if (contest !== settings.activeContest) settings.setActiveContest(contest);
+      if (await qsoLog.create(name, contest, "", r.qsos)) {
+        if (qsoLog.meta) await applyLogContext(qsoLog.meta);
         exportMsg = `Imported ${r.qsos.length} QSOs into new log "${name}"${r.skipped ? ` (${r.skipped} records skipped: no call or date)` : ""}`;
       }
     } catch (e) {
@@ -279,10 +320,32 @@
           class="log-name"
           bind:this={nameInputEl}
           bind:value={nameValue}
+          oninput={() => (nameTyped = true)}
           onkeydown={onNameKey}
           placeholder="log name"
           maxlength="60"
         />
+        {#if naming === "new"}
+          <select
+            class="log-select"
+            value={newFor}
+            title="What the log is for: a saved setup brings its contest, F-keys and call history file; a contest alone keeps your current F-keys."
+            onchange={(e) => onForChange((e.target as HTMLSelectElement).value)}
+          >
+            {#if contestSetups.setups.length}
+              <optgroup label="Saved setups (contest + F-keys + history)">
+                {#each contestSetups.setups as x (x.id)}
+                  <option value={"s:" + x.id}>{x.name}</option>
+                {/each}
+              </optgroup>
+            {/if}
+            <optgroup label="Contests">
+              {#each CONTESTS as c (c.id)}
+                <option value={"c:" + c.id}>{c.name}</option>
+              {/each}
+            </optgroup>
+          </select>
+        {/if}
         <button class="ghost" onclick={commitName}>{naming === "new" ? "Create" : "Rename"}</button>
         <button class="ghost" onclick={() => (naming = null)}>Cancel</button>
       {:else}
@@ -296,7 +359,7 @@
             <option value={l.id}>{l.name}</option>
           {/each}
         </select>
-        <button class="ghost" onclick={() => startNaming("new")} title="Start a new, empty log — for a new contest. The current log is kept and can be opened again from the list.">New log</button>
+        <button class="ghost" onclick={() => startNaming("new")} title="Start a new, empty log for a contest (or a saved setup). The current log is kept and can be opened again from the list; opening a log brings back its contest and setup.">New log</button>
         <button class="ghost" class:on={showLogs} onclick={() => { showLogs = !showLogs; if (showLogs) qsoLog.refreshLogs(); }} title="All logs: open an earlier one, rename, delete, import ADIF">Logs…</button>
       {/if}
     </div>
@@ -338,13 +401,16 @@
       </div>
       <table class="logs">
         <thead>
-          <tr><th>Log</th><th>Contest</th><th class="num">QSOs</th><th>Dates (UTC)</th><th></th></tr>
+          <tr><th>Log</th><th>Contest · setup</th><th class="num">QSOs</th><th>Dates (UTC)</th><th></th></tr>
         </thead>
         <tbody>
           {#each qsoLog.logs.map(liveInfo) as l (l.id)}
             <tr class:current={l.id === qsoLog.meta?.id}>
               <td>{l.name}</td>
-              <td class="dim">{contestName(l.contestId) || "—"}</td>
+              <td class="dim">
+                {contestName(l.contestId) || "—"}{#if l.setupId && contestSetups.setups.some((x) => x.id === l.setupId)}
+                  · {contestSetups.setups.find((x) => x.id === l.setupId)?.name}{/if}
+              </td>
               <td class="num">{l.count}</td>
               <td class="mono dim">{logDates(l)}</td>
               <td class="actions">
@@ -574,7 +640,7 @@
 
   .table-wrap {
     max-height: 280px;
-    overflow-y: auto;
+    overflow: auto;
     border-radius: 4px;
     border: 1px solid #1f2429;
   }

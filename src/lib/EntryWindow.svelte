@@ -748,6 +748,8 @@
 
   .head {
     display: flex;
+    flex-wrap: wrap;
+    gap: 6px 12px;
     align-items: center;
     justify-content: space-between;
     margin-bottom: 10px;
@@ -764,6 +766,7 @@
 
   .ctx {
     display: flex;
+    flex-wrap: wrap;
     align-items: baseline;
     gap: 8px;
     font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
@@ -888,8 +891,11 @@
     filter: brightness(1.2);
   }
 
+  /* With a big Entry font the fields shrink to the panel and "sent" / Log it
+     wrap underneath, instead of the row running off under the bandmap. */
   .row {
     display: flex;
+    flex-wrap: wrap;
     align-items: flex-end;
     gap: 10px;
   }
@@ -898,10 +904,12 @@
     display: flex;
     flex-direction: column;
     gap: 3px;
-    flex: 1;
+    flex: 1 1 8em;
+    min-width: 0;
   }
-  .field.call-field { flex: 2; position: relative; }
-  .field.small { flex: 0 0 80px; }
+  .field.call-field { flex: 2 1 10em; position: relative; }
+  /* Three digits of the Entry font, plus padding. */
+  .field.small { flex: 0 0 calc(var(--win-size, 18px) * 2.4 + 24px); }
 
   label {
     color: #8a949d;
@@ -911,6 +919,9 @@
   }
 
   input {
+    box-sizing: border-box;
+    width: 100%;
+    min-width: 0;
     background: #0c0e10;
     border: 1px solid #2a2f33;
     border-radius: 3px;

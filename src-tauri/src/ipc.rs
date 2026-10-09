@@ -166,9 +166,17 @@ pub async fn log_create(
     app: tauri::AppHandle,
     name: String,
     contest_id: String,
+    setup_id: Option<String>,
     qsos: Option<Vec<Qso>>,
 ) -> Result<log_storage::OpenLog, String> {
-    log_storage::create(&log_storage::data_dir(&app)?, name, contest_id, qsos.unwrap_or_default()).await
+    log_storage::create(
+        &log_storage::data_dir(&app)?,
+        name,
+        contest_id,
+        setup_id.unwrap_or_default(),
+        qsos.unwrap_or_default(),
+    )
+    .await
 }
 
 #[tauri::command]
@@ -182,8 +190,9 @@ pub async fn log_update_meta(
     id: String,
     name: Option<String>,
     contest_id: Option<String>,
+    setup_id: Option<String>,
 ) -> Result<(), String> {
-    log_storage::update_meta(&log_storage::data_dir(&app)?, &id, name, contest_id).await
+    log_storage::update_meta(&log_storage::data_dir(&app)?, &id, name, contest_id, setup_id).await
 }
 
 #[tauri::command]

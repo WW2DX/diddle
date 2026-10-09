@@ -42,6 +42,9 @@ pub struct LogMeta {
     /// Contest profile the log was made for ("" = not recorded yet).
     #[serde(default)]
     pub contest_id: String,
+    /// Saved contest setup (F-keys, history file) in use with it ("" = none).
+    #[serde(default)]
+    pub setup_id: String,
     pub created: i64, // unix ms
 }
 
@@ -175,6 +178,7 @@ async fn load_index(data: &Path) -> Result<(PathBuf, Index), String> {
             id: id.clone(),
             name: if migrated { "Log (before named logs)".into() } else { "Log 1".into() },
             contest_id: String::new(),
+            setup_id: String::new(),
             created: now_ms(),
         });
         idx.active = id;
@@ -230,6 +234,7 @@ pub async fn create(
     data: &Path,
     name: String,
     contest_id: String,
+    setup_id: String,
     qsos: Vec<Qso>,
 ) -> Result<OpenLog, String> {
     let _g = LOCK.lock().await;
@@ -240,6 +245,7 @@ pub async fn create(
         id: id.clone(),
         name: if name.is_empty() { format!("Log {}", idx.logs.len() + 1) } else { name.to_string() },
         contest_id,
+        setup_id,
         created: now_ms(),
     };
     write_qsos(&log_file(&dir, &id)?, &qsos).await?;
@@ -264,6 +270,7 @@ pub async fn update_meta(
     id: &str,
     name: Option<String>,
     contest_id: Option<String>,
+    setup_id: Option<String>,
 ) -> Result<(), String> {
     let _g = LOCK.lock().await;
     let (dir, mut idx) = load_index(data).await?;
@@ -277,6 +284,9 @@ pub async fn update_meta(
     }
     if let Some(c) = contest_id {
         meta.contest_id = c;
+    }
+    if let Some(s) = setup_id {
+        meta.setup_id = s;
     }
     write_index(&dir, &idx).await
 }
@@ -367,10 +377,10 @@ mod tests {
         let first = open(&data, None).await.unwrap().meta;
         save(&data, &first.id, &[qso("UR5ZZ", 1000, 1)]).await.unwrap();
 
-        let urc = create(&data, "URC DX".into(), "generic".into(), vec![]).await.unwrap();
+        let urc = create(&data, "URC DX".into(), "generic".into(), String::new(), vec![]).await.unwrap();
         assert!(urc.qsos.is_empty());
         save(&data, &urc.meta.id, &[qso("K1A", 5000, 1), qso("K2B", 6000, 2)]).await.unwrap();
-        update_meta(&data, &urc.meta.id, Some(" URC DX RTTY ".into()), Some("cqww-rtty".into()))
+        update_meta(&data, &urc.meta.id, Some(" URC DX RTTY ".into()), Some("cqww-rtty".into()), None)
             .await
             .unwrap();
 

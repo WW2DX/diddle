@@ -8,6 +8,7 @@
 
 import { settings } from "$lib/settings.svelte";
 import { macroState, type Macro } from "$lib/macros.svelte";
+import { historyFile } from "$lib/lookupFiles.svelte";
 
 export interface ContestSetup {
   id: string;
@@ -98,9 +99,8 @@ class ContestSetups {
     this.save();
   }
 
-  /// Apply a saved setup: contest, macros, history path. Returns it so the
-  /// caller can (re)load the history file.
-  activate(id: string): ContestSetup | null {
+  /// Apply a saved setup: contest, macros, history file.
+  async activate(id: string): Promise<ContestSetup | null> {
     const s = this.setups.find((x) => x.id === id);
     if (!s) return null;
     this.activeId = s.id;
@@ -109,6 +109,7 @@ class ContestSetups {
     settings.setHistoryPath(s.historyPath || "");
     settings.setHistoryField(s.historyField || "");
     this.save();
+    await historyFile.sync();
     return s;
   }
 
