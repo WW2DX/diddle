@@ -5,6 +5,8 @@ All notable changes to Diddle are documented here. Format loosely follows
 
 ## [Unreleased]
 
+## [0.1.30] — 2026-10-09
+
 ### Added
 - **Makrothen RTTY.** The exchange is your 4-character grid (Settings → operator + contest). Points are the distance between grid-square centres in whole km, using the rules' formula and earth radius, times 2 on 80m and 1.5 on 40m, rounded down. Same square scores 100. A station counts once per band. The Cabrillo `QSO:` lines carry both grids, and ADIF gets `GRIDSQUARE` / `MY_GRIDSQUARE`.
 - **Macros for your station details:** `<NAME>`, `<STATE>`, `<CQZONE>` (or `<ZONE>`) and `<GRID>` (4 characters), alongside `<MYCALL>`.
