@@ -645,6 +645,8 @@ impl TciClient {
         let mut multi: Option<MultiDecoder> = None;
         // Tuning scope — rebuilt with the demod when tones change.
         let mut scope: Option<TuningScope> = None;
+        // DeepRTTY, beside the classic demod (idle unless switched on).
+        let mut deep = crate::deep_rtty::DeepTap::new(self.app.clone());
         let mut audio_calibrated = false;
 
         loop {
@@ -790,9 +792,11 @@ impl TciClient {
                                         cfg.mark_hz,
                                         cfg.space_hz,
                                     ));
+                                    deep.retune(&cfg);
                                     rtty_gen = cur_gen;
                                 }
                                 if !rx_muted {
+                                    deep.push(&mono, info.sample_rate);
                                     let chars = rtty.as_mut().unwrap().push(&mono);
                                     if !chars.is_empty() {
                                         let _ = self.app.emit("rtty", &chars);

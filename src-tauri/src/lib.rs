@@ -1,6 +1,7 @@
 mod audio_input;
 mod call_history;
 mod cty_file;
+mod deep_rtty;
 mod cluster;
 pub mod dsp;
 mod ipc;
@@ -81,6 +82,8 @@ pub fn run() {
             ipc::get_rtty_config,
             ipc::set_rtty_config,
             ipc::set_rtty_squelch,
+            ipc::set_deep_rtty,
+            ipc::deep_rtty_status,
             ipc::log_list,
             ipc::log_open,
             ipc::log_create,

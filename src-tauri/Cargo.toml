@@ -3,6 +3,7 @@ name = "diddle"
 version = "0.1.30"
 description = "RTTY contest logger — TCI-first, rate-focused"
 authors = ["lee@remotehamradio.com"]
+license = "AGPL-3.0-only"
 edition = "2021"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
@@ -54,6 +55,24 @@ rand = "0.8"
 # HTTP (for fetching MASTER.SCP from supercheckpartial.com). rustls-tls keeps
 # the build self-contained — no system OpenSSL needed on macOS/Linux/Windows.
 reqwest = { version = "0.12", default-features = false, features = ["rustls-tls"] }
+# DeepRTTY neural decoder (ONNX model run in pure Rust — no native runtime).
+tract-onnx = "0.23"
+
 # Installed font families for the per-window font pickers.
 fontdb = "0.24"
 
+
+# DeepRTTY's model runs ~30× slower unoptimised; keep `tauri dev` and the
+# tests usable by optimising the inference crates even in debug builds.
+[profile.dev.package.tract-core]
+opt-level = 3
+[profile.dev.package.tract-linalg]
+opt-level = 3
+[profile.dev.package.tract-onnx]
+opt-level = 3
+[profile.dev.package.tract-hir]
+opt-level = 3
+[profile.dev.package.tract-data]
+opt-level = 3
+[profile.dev.package.ndarray]
+opt-level = 3

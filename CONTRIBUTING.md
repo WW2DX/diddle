@@ -44,6 +44,6 @@ Open an issue with:
 
 ## License
 
-By contributing, you agree that your contributions are licensed under the [MIT License](LICENSE).
+By contributing, you agree that your contributions are licensed under the [GNU AGPL v3.0](LICENSE) (AGPL-3.0-only).
 
 *73 — WW2DX*

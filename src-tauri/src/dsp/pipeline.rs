@@ -9,6 +9,7 @@ use std::sync::Arc;
 
 use tauri::{AppHandle, Emitter};
 
+use crate::deep_rtty::DeepTap;
 use crate::dsp::{MultiDecoder, RttyDemod, RttyTunable, Spectrum, TuningScope};
 use crate::scp::ScpDb;
 
@@ -26,6 +27,7 @@ pub struct RxPipeline {
     multi: MultiDecoder,
     demod: RttyDemod,
     scope: TuningScope,
+    deep: DeepTap,
 }
 
 impl RxPipeline {
@@ -37,7 +39,10 @@ impl RxPipeline {
     ) -> Self {
         let cfg = rtty.get().await;
         let rtty_gen = rtty.current_gen();
+        let mut deep = DeepTap::new(app.clone());
+        deep.retune(&cfg);
         Self {
+            deep,
             sample_rate,
             spectrum: Spectrum::new(FFT_SIZE, FFT_STRIDE, sample_rate),
             multi: MultiDecoder::new(sample_rate, app.clone(), scp),
@@ -66,6 +71,7 @@ impl RxPipeline {
             let cfg = self.rtty.get().await;
             self.demod = RttyDemod::new(self.sample_rate, cfg.clone());
             self.scope = TuningScope::new(self.sample_rate, cfg.mark_hz, cfg.space_hz);
+            self.deep.retune(&cfg);
             self.rtty_gen = cur_gen;
         }
 
@@ -81,6 +87,7 @@ impl RxPipeline {
         if muted {
             return;
         }
+        self.deep.push(mono, self.sample_rate);
         let chars = self.demod.push(mono);
         if !chars.is_empty() {
             let _ = self.app.emit("rtty", &chars);

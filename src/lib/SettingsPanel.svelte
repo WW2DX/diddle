@@ -10,6 +10,8 @@
   import { contestSetups } from "$lib/contestSetups.svelte";
   import { cty } from "$lib/ctyStore.svelte";
   import { chime } from "$lib/sound";
+  import { getVersion } from "@tauri-apps/api/app";
+  import { openUrl } from "@tauri-apps/plugin-opener";
 
   // Show the format hint based on the current selection.
   let formatHint = $derived(activeContest().exchangeFormat);
@@ -86,7 +88,12 @@
   let monoFonts = $derived(fonts.filter((f) => f.mono));
   let otherFonts = $derived(fonts.filter((f) => !f.mono));
 
+  let appVersion = $state("");
+
   onMount(async () => {
+    getVersion()
+      .then((v) => (appVersion = v))
+      .catch(() => {});
     listFonts()
       .then((fs) => (fonts = fs))
       .catch((e) => console.error("listFonts failed", e));
@@ -571,6 +578,15 @@
       {/if}
     </div>
   </div>
+
+  <!-- Appropriate legal notices (AGPL-3.0 §0 / GPLv3 §5d). -->
+  <div class="about">
+    Diddle {appVersion ? `v${appVersion}` : ""} · © 2026 WW2DX · Free software under the
+    <button type="button" class="link" onclick={() => openUrl("https://www.gnu.org/licenses/agpl-3.0.html")}>GNU AGPL v3</button>,
+    with ABSOLUTELY NO WARRANTY. Source:
+    <button type="button" class="link" onclick={() => openUrl("https://github.com/WW2DX/diddle")}>github.com/WW2DX/diddle</button>.
+    Includes the DeepRTTY model by e04 (AGPL-3.0).
+  </div>
 </section>
 
 <style>
@@ -875,5 +891,22 @@
     font-size: 14px;
     padding: 2px 6px;
     line-height: 1;
+  }
+  .about {
+    margin-top: 16px;
+    padding-top: 10px;
+    border-top: 1px solid #262b30;
+    color: #6b7176;
+    font-size: 11px;
+    line-height: 1.6;
+  }
+  .about .link {
+    background: none;
+    border: none;
+    padding: 0;
+    color: #92c5fa;
+    font-size: 11px;
+    cursor: pointer;
+    text-decoration: underline;
   }
 </style>

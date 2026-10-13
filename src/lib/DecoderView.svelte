@@ -1,6 +1,17 @@
 <script lang="ts">
   import { onMount, onDestroy } from "svelte";
-  import { onRtty, onTxEcho, scpContainsAny, setRttySquelch, type RigState } from "$lib/tci";
+  import {
+    onRtty,
+    onTxEcho,
+    scpContainsAny,
+    setRttySquelch,
+    setDeepRtty,
+    deepRttyStatus,
+    onRttyDeep,
+    onDeepStatus,
+    type DeepStatus,
+    type RigState,
+  } from "$lib/tci";
   import { radioRx, RX_WIDTHS } from "$lib/radioRx.svelte";
   import { rttyConfig } from "$lib/rttyConfig.svelte";
   import { qsoLog } from "$lib/qsoLog.svelte";
@@ -203,11 +214,49 @@
 
   let segments = $derived(buildSegments(runs));
 
+  // ---- DeepRTTY: the neural decoder's copy, in its own pane under the
+  // classic one. Both run on the same audio, so the two can be compared
+  // line for line; our TX echo goes into both for context. ----
+  let deepRuns = $state<Run[]>([]);
+  let deepSegments = $derived(buildSegments(deepRuns));
+  let deepStatus = $state<DeepStatus>({ state: "off", message: "" });
+  let deepScrollEl = $state<HTMLDivElement | undefined>();
+  let deepAutoScroll = $state(true);
+  let unlistenDeep: (() => void) | null = null;
+  let unlistenDeepStatus: (() => void) | null = null;
+
+  function appendDeep(s: string, tx = false) {
+    const last = deepRuns[deepRuns.length - 1];
+    if (last && last.tx === tx) last.s += s;
+    else deepRuns.push({ tx, s });
+    trimRuns(deepRuns);
+    if (deepAutoScroll) {
+      queueMicrotask(() => {
+        if (deepScrollEl) deepScrollEl.scrollTop = deepScrollEl.scrollHeight;
+      });
+    }
+  }
+
+  function onDeepScroll() {
+    if (!deepScrollEl) return;
+    deepAutoScroll = deepScrollEl.scrollHeight - deepScrollEl.scrollTop - deepScrollEl.clientHeight < 8;
+  }
+
+  // Switch the backend decoder to match the saved setting.
+  $effect(() => {
+    if (!settings.loaded) return;
+    setDeepRtty(settings.deepRtty).catch((e) => console.error("set_deep_rtty failed", e));
+  });
+
   /// Drop the oldest lines once the retained history exceeds the operator's
   /// line budget. A "line" is a newline-terminated run of text; the live,
   /// unterminated tail (`pendingLine`) is not counted. A hard character cap
   /// is also enforced as a backstop.
   function trimHistory() {
+    trimRuns(runs);
+  }
+
+  function trimRuns(runs: Run[]) {
     const maxLines = settings.decodeHistoryLines;
     let lines = 0;
     for (const r of runs) {
@@ -387,7 +436,11 @@
     // With the filter on it still flows through the serialized queue (behind
     // any RX line awaiting classification) so scrollback order matches the
     // on-air order; the in-progress RX line is finalized first.
+    unlistenDeep = await onRttyDeep((c) => appendDeep(c));
+    unlistenDeepStatus = await onDeepStatus((st) => (deepStatus = st));
+    deepRttyStatus().then((st) => (deepStatus = st)).catch(() => {});
     unlistenTx = await onTxEcho((c) => {
+      if (settings.deepRtty) appendDeep(c, true);
       if (!filterNoise) {
         appendText(c, true);
         return;
@@ -404,6 +457,8 @@
   onDestroy(() => {
     unlisten?.();
     unlistenTx?.();
+    unlistenDeep?.();
+    unlistenDeepStatus?.();
   });
 
   function clear() {
@@ -412,6 +467,8 @@
     classifyQueue = [];
   }
 </script>
+
+{#snippet segs(list: Seg[])}{#each list as seg}{#if seg.call}<button class="call-chip" class:tx={seg.tx} class:dupe={workedHere.has(seg.call!)} class:newmult={!workedHere.has(seg.call!) && scoreStore.isNewMult(seg.call!, band)} title={workedHere.has(seg.call!) ? `${seg.call} — already worked on ${band}` : `Click: load ${seg.call} · right-click: add to the stack`} onclick={() => pickCall(seg.call!)} oncontextmenu={(e) => { e.preventDefault(); entryBus.queueNext(seg.call!); }}>{seg.s}</button>{:else}<span class:tx={seg.tx}>{seg.s}</span>{/if}{/each}{/snippet}
 
 <section class="panel" style={settings.fontStyle("decoder")}>
   <header>
@@ -558,6 +615,17 @@
           <span class="dim">dB</span>
         {/if}
       </span>
+      <label
+        class="sq deep-toggle"
+        title="DeepRTTY: a neural-network decoder (e04/DeepRTTY) run beside the classic one, in its own pane. About 4 dB better on weak signals in testing; its text comes a couple of seconds late. 45.45 baud / 170 Hz only."
+      >
+        <input
+          type="checkbox"
+          checked={settings.deepRtty}
+          onchange={(e) => settings.setDeepRtty((e.target as HTMLInputElement).checked)}
+        />
+        Deep
+      </label>
     </div>
   </header>
   <div class="rx-body">
@@ -565,7 +633,7 @@
     <div class="rx-wrap">
       <!-- svelte-ignore a11y_click_events_have_key_events, a11y_no_static_element_interactions -->
       <div class="rx-text" bind:this={scrollEl} onscroll={onScroll} onclick={onTextClick}
-        >{#each segments as seg}{#if seg.call}<button class="call-chip" class:tx={seg.tx} class:dupe={workedHere.has(seg.call!)} class:newmult={!workedHere.has(seg.call!) && scoreStore.isNewMult(seg.call!, band)} title={workedHere.has(seg.call!) ? `${seg.call} — already worked on ${band}` : `Click: load ${seg.call} · right-click: add to the stack`} onclick={() => pickCall(seg.call!)} oncontextmenu={(e) => { e.preventDefault(); entryBus.queueNext(seg.call!); }}>{seg.s}</button>{:else}<span class:tx={seg.tx}>{seg.s}</span>{/if}{/each}{#if pendingLine}<span class="pending">{pendingLine}</span>{/if}{#if segments.length === 0 && !pendingLine}{" "}{/if}</div
+        >{@render segs(segments)}{#if pendingLine}<span class="pending">{pendingLine}</span>{/if}{#if segments.length === 0 && !pendingLine}{" "}{/if}</div
       >
       {#if !autoScroll}
         <button class="jump-btn" onclick={jumpToBottom} title="Jump to latest">
@@ -574,6 +642,21 @@
       {/if}
     </div>
   </div>
+  {#if settings.deepRtty}
+    <div class="deep">
+      <div class="deep-head">
+        <span class="deep-label">DeepRTTY</span>
+        <span class="deep-state deep-{deepStatus.state}">
+          {deepStatus.state === "on" ? "listening · text arrives ~2 s behind" : deepStatus.message || deepStatus.state}
+        </span>
+        <button class="ghost" onclick={() => (deepRuns = [])}>clear</button>
+      </div>
+      <!-- svelte-ignore a11y_click_events_have_key_events, a11y_no_static_element_interactions -->
+      <div class="rx-text deep-text" bind:this={deepScrollEl} onscroll={onDeepScroll} onclick={onTextClick}
+        >{@render segs(deepSegments)}{#if deepSegments.length === 0}<span class="pending">Neural decoder — weak-signal copy, a couple of seconds behind the classic window above.</span>{/if}</div
+      >
+    </div>
+  {/if}
 </section>
 
 <style>
@@ -604,6 +687,23 @@
     color: #8a949d;
   }
   .sq { display: flex; align-items: center; gap: 6px; }
+  .deep-toggle { cursor: pointer; }
+
+  .deep { margin-top: 8px; }
+  .deep-head {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-bottom: 4px;
+    font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+    font-size: 11px;
+  }
+  .deep-label { color: #c084fc; font-weight: 600; letter-spacing: 1px; text-transform: uppercase; font-size: 10px; }
+  .deep-state { color: #6b7176; }
+  .deep-state.deep-loading { color: #fbbf24; }
+  .deep-state.deep-unsupported, .deep-state.deep-error { color: #f87171; }
+  .deep-head .ghost { margin-left: auto; }
+  .rx-text.deep-text { height: 110px; border-color: #3b2a4f; }
   .sq input { width: 110px; }
   .sq-val { min-width: 2.5ch; text-align: right; }
 

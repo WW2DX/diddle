@@ -8,7 +8,7 @@ Diddle is a desktop RTTY contest logger built around [TCI](https://github.com/ma
 
 [![Release](https://img.shields.io/github/v/release/WW2DX/diddle?include_prereleases&sort=semver)](https://github.com/WW2DX/diddle/releases)
 [![Build](https://github.com/WW2DX/diddle/actions/workflows/release.yml/badge.svg)](https://github.com/WW2DX/diddle/actions/workflows/release.yml)
-[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
+[![License: AGPL v3](https://img.shields.io/badge/License-AGPL_v3-blue.svg)](LICENSE)
 
 ---
 
@@ -137,7 +137,9 @@ Issues and PRs welcome — see **[CONTRIBUTING.md](CONTRIBUTING.md)**. Diddle is
 
 ## License
 
-[MIT](LICENSE) © 2026 WW2DX
+© 2026 WW2DX. Diddle is free software under the [GNU Affero General Public License v3.0](LICENSE) (AGPL-3.0-only): you may use, share and modify it, and anyone who distributes a modified version, or runs one for users over a network, must make their source available under the same licence. It comes with no warranty.
+
+Diddle includes the [DeepRTTY](https://github.com/e04/DeepRTTY) decoder model by e04, also AGPL-3.0 (see [`src-tauri/models/DEEPRTTY-NOTICE.md`](src-tauri/models/DEEPRTTY-NOTICE.md)). Releases up to and including v0.1.30 were published under the MIT licence.
 
 ---
 

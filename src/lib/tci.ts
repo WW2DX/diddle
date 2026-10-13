@@ -381,3 +381,26 @@ export interface FontFamily {
 export async function listFonts(): Promise<FontFamily[]> {
   return await invoke("list_fonts");
 }
+
+// ----- DeepRTTY (neural decoder beside the classic one) -----
+
+export interface DeepStatus {
+  state: "off" | "loading" | "on" | "unsupported" | "error";
+  message: string;
+}
+
+export async function setDeepRtty(enabled: boolean): Promise<void> {
+  await invoke("set_deep_rtty", { enabled });
+}
+
+export async function deepRttyStatus(): Promise<DeepStatus> {
+  return await invoke("deep_rtty_status");
+}
+
+export function onRttyDeep(cb: (chunk: string) => void): Promise<UnlistenFn> {
+  return listen<string>("rtty_deep", (e) => cb(e.payload));
+}
+
+export function onDeepStatus(cb: (s: DeepStatus) => void): Promise<UnlistenFn> {
+  return listen<DeepStatus>("rtty_deep:status", (e) => cb(e.payload));
+}

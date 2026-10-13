@@ -29,6 +29,7 @@ interface Stored {
   stackTuKey?: string; // macro ESM sends at the TU step with callers stacked
   squelch?: number; // RX-window decoder squelch, 0 (open) – 100
   historyField?: string; // history column that pre-fills Exch; "" = auto
+  deepRtty?: boolean; // DeepRTTY neural decoder pane in the RX window
 }
 
 /// Windows whose text font the operator can pick.
@@ -84,6 +85,7 @@ class Settings {
   stackTuKey = $state<string>("F8");
   squelch = $state<number>(30);
   historyField = $state<string>("");
+  deepRtty = $state<boolean>(false);
   loaded = $state(false);
 
   load() {
@@ -120,6 +122,7 @@ class Settings {
         if (obj.multBell !== undefined) this.multBell = obj.multBell;
         if (obj.stackTuKey) this.stackTuKey = obj.stackTuKey;
         this.historyField = obj.historyField || "";
+        if (obj.deepRtty !== undefined) this.deepRtty = obj.deepRtty;
         if (obj.squelch !== undefined) this.squelch = Math.min(100, Math.max(0, obj.squelch));
       }
     } catch (e) {
@@ -156,6 +159,7 @@ class Settings {
           stackTuKey: this.stackTuKey,
           squelch: this.squelch,
           historyField: this.historyField,
+          deepRtty: this.deepRtty,
         } satisfies Stored),
       );
     } catch (e) {
@@ -256,6 +260,10 @@ class Settings {
   setSquelch(v: number, persist = true) {
     this.squelch = Math.round(Math.min(100, Math.max(0, v)));
     if (persist) this.save();
+  }
+  setDeepRtty(v: boolean) {
+    this.deepRtty = v;
+    this.save();
   }
   setHistoryField(v: string) {
     this.historyField = v;

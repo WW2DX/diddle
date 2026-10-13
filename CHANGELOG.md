@@ -5,6 +5,17 @@ All notable changes to Diddle are documented here. Format loosely follows
 
 ## [Unreleased]
 
+### Added
+- **DeepRTTY neural decoder (experimental),** run beside the classic one. Tick **Deep** in the RX decoder and a second pane opens under the RX text, showing the copy from [e04/DeepRTTY](https://github.com/e04/DeepRTTY), a neural network that reads a 12-second spectrogram around the tone pair. Calls in it click and right-click like the main window, and your TX echo shows in both.
+  - **Weak signals:** about 4 dB better in testing. On the same audio it copied 90% at −10 dB SNR where the classic decoder managed 55%, and 84% against 12% at −12 dB.
+  - **Delay:** its text arrives about 2 s after the classic window's, because each character is confirmed by overlapping windows.
+  - **Limits:** 45.45 baud, 170 Hz shift only. It follows retunes and AFC and tolerates ±40 Hz of mistuning.
+  - **Cost:** the model is built into the app and runs in pure Rust (tract), about 4% of one CPU core.
+  - **Licence:** DeepRTTY is AGPL-3.0; see `src-tauri/models/DEEPRTTY-NOTICE.md`.
+
+### Changed
+- **Diddle is now licensed under the GNU AGPL v3.0 (AGPL-3.0-only)**, so it can include DeepRTTY, which is AGPL-3.0. Using, sharing and modifying Diddle is unchanged. Anyone who distributes a modified version, or runs one for users over a network, must publish its source under the same licence. Settings now ends with a short licence and source notice. Releases up to and including v0.1.30 remain MIT.
+
 ## [0.1.30] — 2026-10-09
 
 ### Added

@@ -522,3 +522,14 @@ pub async fn list_fonts() -> Result<Vec<FontFamily>, String> {
     .await
     .map_err(|e| e.to_string())
 }
+
+/// Turn the DeepRTTY neural decoder (run beside the classic one) on or off.
+#[tauri::command]
+pub fn set_deep_rtty(app: tauri::AppHandle, enabled: bool) {
+    crate::deep_rtty::set_enabled(&app, enabled);
+}
+
+#[tauri::command]
+pub fn deep_rtty_status() -> crate::deep_rtty::DeepStatus {
+    crate::deep_rtty::status()
+}
