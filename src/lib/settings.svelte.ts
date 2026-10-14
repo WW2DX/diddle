@@ -11,6 +11,7 @@ interface Stored {
   myState?: string; // state / province / country abbrev
   myZone?: string; // CQ zone
   myGrid?: string; // Maidenhead grid
+  myAge?: string; // operator age (JARL RTTY exchange); "" = send 01
   activeContest?: string;
   scpPath?: string;
   clusterHost?: string;
@@ -72,6 +73,7 @@ class Settings {
   myState = $state<string>("");
   myZone = $state<string>("");
   myGrid = $state<string>("");
+  myAge = $state<string>("");
   activeContest = $state<string>("generic");
   scpPath = $state<string>("");
   clusterHost = $state<string>("dxc.k1ttt.net");
@@ -111,6 +113,7 @@ class Settings {
         this.myState = (obj.myState || "").toUpperCase();
         this.myZone = (obj.myZone || "").toUpperCase();
         this.myGrid = (obj.myGrid || "").toUpperCase();
+        this.myAge = obj.myAge || "";
         this.activeContest = obj.activeContest || "generic";
         this.scpPath = obj.scpPath || "";
         if (obj.clusterHost) this.clusterHost = obj.clusterHost;
@@ -157,6 +160,7 @@ class Settings {
           myState: this.myState,
           myZone: this.myZone,
           myGrid: this.myGrid,
+          myAge: this.myAge,
           activeContest: this.activeContest,
           scpPath: this.scpPath,
           clusterHost: this.clusterHost,
@@ -208,6 +212,15 @@ class Settings {
   setMyZone(v: string) {
     this.myZone = v.replace(/[^0-9]/g, "").slice(0, 2);
     this.save();
+  }
+  /// Two digits; "" sends 01, the substitute JARL accepts in place of an age.
+  setMyAge(v: string) {
+    this.myAge = v.replace(/\D/g, "").slice(0, 2);
+    this.save();
+  }
+  /// The age as sent: two digits, 01 when not given.
+  get sentAge(): string {
+    return this.myAge ? this.myAge.padStart(2, "0") : "01";
   }
   setMyGrid(v: string) {
     this.myGrid = v.toUpperCase().replace(/[^A-Z0-9]/g, "").slice(0, 6);

@@ -97,6 +97,16 @@ export const CONTESTS: ContestProfile[] = [
     historyExchange: (r) => [hf(r, "Name"), hf(r, "State", "Loc1")].filter(Boolean).join(" "),
   },
   {
+    id: "jarl-rtty",
+    name: "JARL World Wide RTTY",
+    // JARL's rules don't name a CONTEST: value; their upload accepts Cabrillo.
+    cabrilloName: "JARL-RTTY",
+    exchangeFormat: "RST + Age (01 if not given)",
+    rcvdPlaceholder: "45",
+    buildSent: () => `599 ${settings.sentAge}`,
+    historyExchange: (r) => hf(r, "Age", "Exch1"),
+  },
+  {
     id: "makrothen-rtty",
     name: "Makrothen RTTY",
     cabrilloName: "MAKROTHEN-RTTY",

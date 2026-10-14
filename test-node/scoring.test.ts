@@ -2,7 +2,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { CtyDb } from "../src/lib/cty.ts";
-import { parseExchange, scoreLog, wpxPrefix, MultTracker, gridDistanceKm, makrothenPoints } from "../src/lib/scoring.ts";
+import { parseExchange, scoreLog, wpxPrefix, MultTracker, gridDistanceKm, makrothenPoints, jarlCallArea, isMaritimeMobile } from "../src/lib/scoring.ts";
 
 const db = CtyDb.parse(readFileSync(new URL("../static/cty.dat", import.meta.url), "utf8"));
 const lookup = (c: string) => db.lookup(c);
@@ -101,4 +101,40 @@ test("Makrothen: grid distance, band factors, same square", () => {
   assert.equal(s.points, 3084 + 4626);
   assert.equal(s.score, 3084 + 4626);
   assert.equal(s.dupes, 1);
+});
+
+test("JARL RTTY: call areas, entities, continent points, maritime mobile", () => {
+  // Call areas from the rules' own examples.
+  assert.equal(jarlCallArea("JA1RL", lookup("JA1RL")), "JA1");
+  assert.equal(jarlCallArea("7K1XYZ", lookup("7K1XYZ")), "JA1");
+  assert.equal(jarlCallArea("JR4ABC", lookup("JR4ABC")), "JA4");
+  assert.equal(jarlCallArea("8J20", lookup("8J20")), "JA0");
+  assert.equal(jarlCallArea("JA1RL/3", lookup("JA1RL/3")), "JA3");
+  assert.equal(jarlCallArea("VK/JA1YRL", lookup("VK/JA1YRL")), "VK0");
+  assert.equal(jarlCallArea("K1AR", lookup("K1AR")), "K1");
+  assert.equal(jarlCallArea("W6ABC/4", lookup("W6ABC/4")), "K4");
+  assert.equal(jarlCallArea("VE3XYZ", lookup("VE3XYZ")), "VE3");
+  assert.equal(jarlCallArea("DL1ABC", lookup("DL1ABC")), undefined);
+  assert.equal(isMaritimeMobile("W1AW/MM"), true);
+
+  // From W1AW (NA): W = same continent 2, JA = 3, DL = 3; MM 2, no mult.
+  const s = scoreLog(
+    "jarl-rtty",
+    [
+      { call: "K1AR", band: "20m", exchRcvd: "55" },
+      { call: "W1XX", band: "20m", exchRcvd: "62" }, // same area K1: no new mult
+      { call: "JA1RL", band: "20m", exchRcvd: "01" },
+      { call: "JA1RL", band: "40m", exchRcvd: "01" }, // new band: counts again
+      { call: "DL1ABC", band: "20m", exchRcvd: "40" },
+      { call: "DL2XYZ", band: "20m", exchRcvd: "33" }, // Germany again on 20m
+      { call: "W9XX/MM", band: "20m", exchRcvd: "70" },
+    ],
+    lookup,
+    me,
+  );
+  assert.equal(s.points, 2 + 2 + 3 + 3 + 3 + 3 + 2);
+  // Areas K1, JA1 (20m), JA1 (40m); entities DL (20m).
+  assert.equal(s.mults.area, 3);
+  assert.equal(s.mults.country, 1);
+  assert.equal(s.score, 18 * 4);
 });

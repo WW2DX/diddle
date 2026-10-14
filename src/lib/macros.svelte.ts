@@ -165,6 +165,8 @@ class MacroState {
         case "CQZONE":
         case "ZONE":
           return settings.myZone;
+        case "AGE":
+          return settings.sentAge;
         case "GRID":
           // Four characters, the way contests exchange it.
           return settings.myGrid.slice(0, 4);

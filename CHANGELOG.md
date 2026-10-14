@@ -5,6 +5,14 @@ All notable changes to Diddle are documented here. Format loosely follows
 
 ## [Unreleased]
 
+### Added
+- **JARL World Wide RTTY contest.**
+  - **Exchange:** RST + operator age. Set **Age** in Settings; leave it blank to send 01, which JARL accepts instead. New `<AGE>` macro.
+  - **Points:** 2 on the same continent (your own country included), 3 between continents.
+  - **Multipliers, per band:** DXCC entities, except that JA, W, VE and VK count by call area instead. The area is the last digit of the prefix; a portable designator overrides it, and one with no digit means area 0 (VK/JA1YRL → VK0). Maritime mobile scores 2 points and no multiplier.
+  - **Exports:** Cabrillo carries RST + age columns, and ADIF has `AGE`.
+  - **Cabrillo name:** JARL's rules don't name one; Diddle uses `JARL-RTTY`.
+
 ## [0.1.31] — 2026-10-13
 
 ### Added

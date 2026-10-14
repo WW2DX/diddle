@@ -53,6 +53,7 @@ export interface ParsedExch {
   name?: string;
   dx?: boolean; // sent "DX" or is outside W/VE
   grid?: string; // 4-character Maidenhead locator
+  age?: string; // JARL RTTY
 }
 
 const RST = /^(5[1-9][1-9]|5NN|59|5N)$/;
@@ -88,6 +89,9 @@ export function parseExchange(contestId: string, exch: string, hit: CtyHit | nul
       }
       break;
     }
+    case "jarl-rtty":
+      if (num) out.age = num;
+      break;
     case "makrothen-rtty": {
       const g = toks.find((t) => /^[A-R]{2}\d{2}([A-X]{2})?$/.test(t));
       if (g) out.grid = g.slice(0, 4);
@@ -97,6 +101,25 @@ export function parseExchange(contestId: string, exch: string, hit: CtyHit | nul
       if (num) out.serial = parseInt(num, 10);
   }
   return out;
+}
+
+// ---- JARL call areas ----
+
+// Countries JARL scores by call area instead of as one entity.
+const JARL_AREA_COUNTRIES = new Set(["JA", "K", "VE", "VK"]);
+
+export function isMaritimeMobile(call: string): boolean {
+  return /\/MM$/i.test(call.trim());
+}
+
+/// JARL call-area multiplier ("JA1", "K4", "VE3", "VK0"…) for a station in
+/// Japan, the US, Canada or Australia; undefined elsewhere. The area is the
+/// last digit of the prefix — a portable designator's when there is one,
+/// and 0 if that designator has no digit (VK/JA1YRL → VK0, JA1RL/3 → JA3).
+export function jarlCallArea(call: string, his: CtyHit | null): string | undefined {
+  if (!his || !JARL_AREA_COUNTRIES.has(his.entity.prefix)) return undefined;
+  const digit = wpxPrefix(call).match(/(\d)\D*$/)?.[1] ?? "0";
+  return `${his.entity.prefix}${digit}`;
 }
 
 // ---- Grid distance (Makrothen) ----
@@ -252,6 +275,24 @@ const RULES: Record<string, ContestRules> = {
       return { prefix: wpxPrefix(q.call) };
     },
   },
+  // JARL World Wide RTTY: 2 points on the same continent (own country too),
+  // 3 between continents; per band, DXCC entities plus — instead of the
+  // entity — each JA/W/VE/VK call area. Maritime mobile: 2 points, no mult.
+  "jarl-rtty": {
+    kinds: [
+      { key: "country", label: "Ctys", perBand: true },
+      { key: "area", label: "Areas", perBand: true },
+    ],
+    points(my, his) {
+      if (!my || !his) return 2;
+      return my.cont === his.cont ? 2 : 3;
+    },
+    mults(q, his) {
+      if (!his || isMaritimeMobile(q.call)) return {};
+      const area = jarlCallArea(q.call, his);
+      return area ? { area } : { country: dxccOf(his) };
+    },
+  },
   // Points by distance between grid squares; no multipliers.
   "makrothen-rtty": {
     kinds: [],
@@ -354,6 +395,8 @@ function describe(kind: string, value: string, his: CtyHit | null): string {
       return his?.entity.name ?? value;
     case "prefix":
       return `Prefix ${value}`;
+    case "area":
+      return `Area ${value}`;
     default:
       return value;
   }

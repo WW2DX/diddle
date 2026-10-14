@@ -76,6 +76,7 @@ export function toAdif(qsos: Qso[]): string {
     if (p.serial !== undefined) parts.push(adifField("SRX", String(p.serial)));
     if (p.name) parts.push(adifField("NAME", p.name));
     if (p.grid) parts.push(adifField("GRIDSQUARE", p.grid));
+    if (p.age) parts.push(adifField("AGE", p.age));
     if (settings.myGrid) parts.push(adifField("MY_GRIDSQUARE", settings.myGrid.toUpperCase()));
     if (settings.activeContest === "wpx-rtty") parts.push(adifField("PFX", wpxPrefix(q.call)));
     if (/^(generic|wpx-rtty|rtty-roundup)$/.test(settings.activeContest)) {
@@ -128,6 +129,10 @@ function cabSide(call: string, rst: string, exch: string, serial: number, isMine
       const name = (isMine ? settings.myName : toks[0]) || "";
       const loc = (isMine ? settings.myState : toks[toks.length - 1]) || "";
       return `${c} ${name.padEnd(10, " ")} ${loc.padEnd(3, " ")}`;
+    }
+    case "jarl-rtty": {
+      const age = isMine ? settings.sentAge : p.age || exch.trim().split(/\s+/).pop() || "";
+      return `${c} ${r} ${age.padEnd(3, " ")}`;
     }
     case "makrothen-rtty": {
       const grid = isMine ? settings.myGrid.slice(0, 4).toUpperCase() : p.grid || exch.trim().slice(0, 4);

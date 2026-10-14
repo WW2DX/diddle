@@ -70,6 +70,8 @@ function receivedFromParts(r: Record<string, string>, contest: string): string {
         return [r.NAME, loc];
       case "MAKROTHEN-RTTY":
         return [r.GRIDSQUARE];
+      case "JARL-RTTY":
+        return [r.AGE || r.SRX];
       default:
         // Serial and/or location (Roundup: state/province, or serial for DX).
         return [r.SRX, loc];

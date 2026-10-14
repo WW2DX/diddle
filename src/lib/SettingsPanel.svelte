@@ -198,6 +198,19 @@
       />
     </div>
 
+    <div class="field small">
+      <label for="s-age" title="Operator age, for the JARL RTTY exchange. Leave blank to send 01, which JARL accepts instead.">Age</label>
+      <input
+        id="s-age"
+        type="text"
+        inputmode="numeric"
+        value={settings.myAge}
+        oninput={(e) => settings.setMyAge((e.target as HTMLInputElement).value)}
+        placeholder="01"
+        maxlength="2"
+      />
+    </div>
+
     <div class="field contest">
       <label for="s-contest">Contest</label>
       <select
@@ -508,7 +521,8 @@
         <span class="mono">&lt;NAME&gt;</span>
         <span class="mono">&lt;STATE&gt;</span>
         <span class="mono">&lt;CQZONE&gt;</span>
-        <span class="mono">&lt;GRID&gt;</span> (yours, from above; grid as 4 characters)
+        <span class="mono">&lt;GRID&gt;</span>
+        <span class="mono">&lt;AGE&gt;</span> (yours, from above; grid as 4 characters, age 01 if blank)
         <span class="mono">&lt;CALL&gt;</span> (his)
         <span class="mono">&lt;SERIAL&gt;</span> are substituted at send time (case doesn't matter).
         <span class="mono">&lt;CRLF&gt;</span> new line ·
