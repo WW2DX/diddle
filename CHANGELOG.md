@@ -5,6 +5,8 @@ All notable changes to Diddle are documented here. Format loosely follows
 
 ## [Unreleased]
 
+## [0.1.31] — 2026-10-13
+
 ### Added
 - **DeepRTTY neural decoder (experimental),** run beside the classic one. Tick **Deep** in the RX decoder and a second pane opens under the RX text, showing the copy from [e04/DeepRTTY](https://github.com/e04/DeepRTTY), a neural network that reads a 12-second spectrogram around the tone pair. Calls in it click and right-click like the main window, and your TX echo shows in both.
   - **Weak signals:** about 4 dB better in testing. On the same audio it copied 90% at −10 dB SNR where the classic decoder managed 55%, and 84% against 12% at −12 dB.
