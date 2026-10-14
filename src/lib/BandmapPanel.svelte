@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { layout, watchResize } from "$lib/layout.svelte";
   import { setFreq, type RigState } from "$lib/tci";
   import { cluster, type ClusterSpot } from "$lib/cluster.svelte";
   import { spots as decoderSpots } from "$lib/spots.svelte";
@@ -132,6 +133,10 @@
     return i < 0 ? rows.length : i;
   });
   let rowsEl = $state<HTMLDivElement | undefined>();
+  // Undocked, the list's height is the operator's (resize corner).
+  $effect(() => {
+    if (rowsEl && !docked) return watchResize(rowsEl, (h) => layout.setBandmapHeight(h));
+  });
   let hereEl = $state<HTMLDivElement | undefined>();
   const MANUAL_SCROLL_HOLD_MS = 5000;
   let manualScrollAt = 0;
@@ -279,7 +284,7 @@
       let the multi-decoder find some signals on this band.
     </div>
   {:else}
-    <div class="rows" bind:this={rowsEl} onscroll={onRowsScroll}>
+    <div class="rows" style={docked ? "" : `height: ${layout.bandmapHeight}px`} bind:this={rowsEl} onscroll={onRowsScroll}>
       {#each rows as r, i (r.call + "@" + r.freqHz)}
         {#if i === hereIdx}
           <div class="here" bind:this={hereEl} title="Your operating frequency">
@@ -400,7 +405,7 @@
   }
   .panel.docked header { flex-wrap: wrap; gap: 6px; }
   .panel.docked .legend { flex-wrap: wrap; gap: 6px 10px; }
-  .panel.docked .rows { flex: 1; min-height: 0; max-height: none; }
+  .panel.docked .rows { flex: 1; min-height: 0; max-height: none; resize: none; }
   .panel.docked .empty { flex: 1; }
   .panel.docked .row { grid-template-columns: 1.2em 8em 7.5em minmax(0, 1fr) 2.8em; gap: 8px; }
 
@@ -425,8 +430,9 @@
     display: flex;
     flex-direction: column;
     gap: 1px;
-    max-height: 320px;
     overflow-y: auto;
+    resize: vertical; /* undocked: drag the corner to resize */
+    min-height: 60px;
     border: 1px solid #1f2429;
     border-radius: 4px;
     background: #0c0e10;

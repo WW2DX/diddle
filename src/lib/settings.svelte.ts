@@ -30,6 +30,9 @@ interface Stored {
   squelch?: number; // RX-window decoder squelch, 0 (open) – 100
   historyField?: string; // history column that pre-fills Exch; "" = auto
   deepRtty?: boolean; // DeepRTTY neural decoder pane in the RX window
+  waterfallHeight?: number; // px
+  rxHeight?: number; // RX decoder text, px
+  waterfallRf?: boolean; // waterfall RF-up left→right, like the radio's spectrum
 }
 
 /// Windows whose text font the operator can pick.
@@ -48,6 +51,13 @@ export interface WinFont {
 }
 const NO_FONT: WinFont = { family: "", size: 0, slashedZero: false };
 export const BANDMAP_WIDTH_MIN = 300;
+// Waterfall and RX text start compact (they used to be 260 / 220 px) so
+// more of the operating panels fit on screen; both can be dragged taller.
+export const WATERFALL_HEIGHT_DEFAULT = 140;
+export const RX_HEIGHT_DEFAULT = 165;
+function clampH(px: number): number {
+  return Math.round(Math.min(900, Math.max(60, px)));
+}
 export const BANDMAP_WIDTH_MAX = 900;
 
 // Bounds for how many decoded lines the RX window keeps before old lines
@@ -86,6 +96,9 @@ class Settings {
   squelch = $state<number>(30);
   historyField = $state<string>("");
   deepRtty = $state<boolean>(false);
+  waterfallHeight = $state<number>(WATERFALL_HEIGHT_DEFAULT);
+  rxHeight = $state<number>(RX_HEIGHT_DEFAULT);
+  waterfallRf = $state<boolean>(true);
   loaded = $state(false);
 
   load() {
@@ -123,6 +136,9 @@ class Settings {
         if (obj.stackTuKey) this.stackTuKey = obj.stackTuKey;
         this.historyField = obj.historyField || "";
         if (obj.deepRtty !== undefined) this.deepRtty = obj.deepRtty;
+        if (obj.waterfallHeight) this.waterfallHeight = clampH(obj.waterfallHeight);
+        if (obj.rxHeight) this.rxHeight = clampH(obj.rxHeight);
+        if (obj.waterfallRf !== undefined) this.waterfallRf = obj.waterfallRf;
         if (obj.squelch !== undefined) this.squelch = Math.min(100, Math.max(0, obj.squelch));
       }
     } catch (e) {
@@ -160,6 +176,9 @@ class Settings {
           squelch: this.squelch,
           historyField: this.historyField,
           deepRtty: this.deepRtty,
+          waterfallHeight: this.waterfallHeight,
+          rxHeight: this.rxHeight,
+          waterfallRf: this.waterfallRf,
         } satisfies Stored),
       );
     } catch (e) {
@@ -260,6 +279,23 @@ class Settings {
   setSquelch(v: number, persist = true) {
     this.squelch = Math.round(Math.min(100, Math.max(0, v)));
     if (persist) this.save();
+  }
+  /// Panel heights, from their resize handles.
+  setWaterfallHeight(px: number) {
+    const h = clampH(px);
+    if (h === this.waterfallHeight) return;
+    this.waterfallHeight = h;
+    this.save();
+  }
+  setRxHeight(px: number) {
+    const h = clampH(px);
+    if (h === this.rxHeight) return;
+    this.rxHeight = h;
+    this.save();
+  }
+  setWaterfallRf(v: boolean) {
+    this.waterfallRf = v;
+    this.save();
   }
   setDeepRtty(v: boolean) {
     this.deepRtty = v;

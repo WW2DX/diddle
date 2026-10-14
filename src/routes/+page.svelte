@@ -13,6 +13,8 @@
   import TestPanel from "$lib/TestPanel.svelte";
   import BandmapPanel from "$lib/BandmapPanel.svelte";
   import ScorePanel from "$lib/ScorePanel.svelte";
+  import PanelFrame from "$lib/PanelFrame.svelte";
+  import { layout } from "$lib/layout.svelte";
   import { cty } from "$lib/ctyStore.svelte";
   import { scpFile, historyFile } from "$lib/lookupFiles.svelte";
   import type { RigState } from "$lib/tci";
@@ -61,7 +63,10 @@
     handle.addEventListener("pointerup", up);
   }
 
-  let docked = $derived(settings.bandmapSide && viewportW / zoom >= DOCK_MIN_WIDTH);
+  // A folded bandmap leaves the side column and shows as a bar in the main one.
+  let docked = $derived(
+    settings.bandmapSide && !layout.folded.bandmap && viewportW / zoom >= DOCK_MIN_WIDTH,
+  );
 
   function setZoom(z: number) {
     zoom = Math.min(2, Math.max(0.5, Math.round(z * 20) / 20));
@@ -114,6 +119,7 @@
 
   onMount(() => {
     settings.load();
+    layout.load();
     macroState.load();
     contestSetups.load();
     qsoLog.load();
@@ -150,15 +156,15 @@
 
 <main class:docked style="--bm-w: {settings.bandmapWidth}px">
   <div class="ops">
-    <Waterfall />
-    <DecoderView {rig} />
-    <EntryWindow {rig} />
-    <FKeys />
+    <PanelFrame id="waterfall"><Waterfall /></PanelFrame>
+    <PanelFrame id="decoder"><DecoderView {rig} /></PanelFrame>
+    <PanelFrame id="entry"><EntryWindow {rig} /></PanelFrame>
+    <PanelFrame id="fkeys"><FKeys /></PanelFrame>
     {#if !docked}
-      <BandmapPanel {rig} />
+      <PanelFrame id="bandmap"><BandmapPanel {rig} /></PanelFrame>
     {/if}
-    <ScorePanel />
-    <Logbook />
+    <PanelFrame id="score"><ScorePanel /></PanelFrame>
+    <PanelFrame id="log"><Logbook /></PanelFrame>
 
     <CollapsiblePanel title="Settings — operator + contest" open={false}>
       <SettingsPanel />
@@ -176,7 +182,7 @@
         title="Drag to resize the bandmap"
         onpointerdown={startResize}
       ></div>
-      <BandmapPanel {rig} docked />
+      <PanelFrame id="bandmap" fill><BandmapPanel {rig} docked /></PanelFrame>
     </aside>
   {/if}
 </main>

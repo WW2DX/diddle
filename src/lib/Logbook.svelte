@@ -7,6 +7,12 @@
   import { contestSetups } from "$lib/contestSetups.svelte";
   import { CONTESTS, activeContest } from "$lib/contests";
   import { importAdif } from "$lib/adifImport";
+  import { layout, watchResize } from "$lib/layout.svelte";
+
+  let tableWrapEl = $state<HTMLDivElement | undefined>();
+  $effect(() => {
+    if (tableWrapEl) return watchResize(tableWrapEl, (h) => layout.setLogHeight(h));
+  });
   import { bandFromHz, fmtMhz } from "$lib/bands";
   import { toAdif, toCabrillo } from "$lib/exports";
   import { settings } from "$lib/settings.svelte";
@@ -440,7 +446,7 @@
   {#if qsoLog.qsos.length === 0}
     <div class="empty">No QSOs yet. Type a callsign + exchange + Enter to log.</div>
   {:else}
-    <div class="table-wrap">
+    <div class="table-wrap" style="height: {layout.logHeight}px" bind:this={tableWrapEl}>
       <table>
         <thead>
           <tr>
@@ -638,8 +644,10 @@
     gap: 4px;
   }
 
+  /* Drag the bottom-right corner to resize. */
   .table-wrap {
-    max-height: 280px;
+    resize: vertical;
+    min-height: 60px;
     overflow: auto;
     border-radius: 4px;
     border: 1px solid #1f2429;

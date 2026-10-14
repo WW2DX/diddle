@@ -5,8 +5,14 @@
 //   is a steep bandpass around the pair — a neighbour 400 Hz away is down
 //   ~60 dB — so a strong station elsewhere in the passband no longer leaks
 //   into the correlators and raises the squelch floor over a weak one.
-// - Two quadrature correlators (NCOs at mark/space), matched-filter
-//   integration over one bit period.
+// - Two quadrature correlators (NCOs at mark/space), integrated over one
+//   bit period with a tapered window: the whole bit, plus the middle half
+//   counted twice more. A plain one-bit boxcar is the best you can do in
+//   steady noise but not on a fading HF path: multipath smears each bit's
+//   tone a few ms into the next, and when the tone being sent is in a
+//   selective fade that echo can outweigh it. Weighting the clean middle of
+//   the bit cut errors on CCIR poor / flutter channels about in half, at no
+//   measurable cost in plain noise.
 // - Slicer: bigger of mark vs. space magnitude → mark=1, space=0.
 // - Async-serial state machine: detect start bit (space after mark idle),
 //   sample data bits at samples-per-bit intervals at end of each bit
@@ -193,6 +199,11 @@ pub struct RttyDemod {
     space_i_sum: f32,
     space_q_sum: f32,
     buf_idx: usize,
+    // The same four sums over the middle half of the bit (see the header):
+    // samples enter at `centre_in` samples old and leave at `centre_out`.
+    centre_sums: [f32; 4],
+    centre_in: usize,
+    centre_out: usize,
 
     // Slicer with hysteresis. Normalized discriminator
     // (mark_mag2 - space_mag2) / (mark_mag2 + space_mag2) must cross
@@ -272,6 +283,10 @@ impl Phasor {
 // Lower hysteresis is OK now that AGC + bandpass clean up the noise
 // floor — the discriminator is much steadier, so 6% margin is enough.
 const HYST_THRESHOLD: f32 = 0.06;
+// Tapered integration window: the middle CENTRE_FRACTION of the bit gets
+// CENTRE_WEIGHT extra weight on top of the full-bit boxcar.
+const CENTRE_FRACTION: f32 = 0.5;
+const CENTRE_WEIGHT: f32 = 2.0;
 // Squelch contrast averaging time, in bits: long enough to steady the noise
 // reading (99th percentile 0.67 at 3 bits vs 0.77 at 1), short enough that
 // a station's first character still opens it.
@@ -293,6 +308,7 @@ impl RttyDemod {
         let sr = sample_rate as f32;
         let spb = sr / cfg.baud;
         let int_len = spb.round() as usize;
+        let centre_len = (int_len as f32 * CENTRE_FRACTION).round() as usize;
 
         // Bandpass centered between mark and space. Bandwidth = shift + ~130 Hz
         // of margin, with a 300 Hz floor — fits both tones and their
@@ -327,6 +343,9 @@ impl RttyDemod {
             space_i_sum: 0.0,
             space_q_sum: 0.0,
             buf_idx: 0,
+            centre_sums: [0.0; 4],
+            centre_in: (int_len - centre_len) / 2,
+            centre_out: ((int_len - centre_len) / 2 + centre_len).min(int_len - 1),
             last_bit: true, // idle line is mark
             contrast: 0.5,
             contrast_alpha: 1.0 / (CONTRAST_BITS * spb),
@@ -388,10 +407,20 @@ impl RttyDemod {
         self.space_q_buf[idx] = sq;
         self.buf_idx = (idx + 1) % self.int_len;
 
-        let mark_mag2 =
-            self.mark_i_sum * self.mark_i_sum + self.mark_q_sum * self.mark_q_sum;
-        let space_mag2 =
-            self.space_i_sum * self.space_i_sum + self.space_q_sum * self.space_q_sum;
+        // Middle-of-the-bit sums: slide a shorter window through the same
+        // buffers (the newest sample is at `idx`).
+        let n = self.int_len;
+        let enter = (idx + n - self.centre_in) % n;
+        let leave = (idx + n - self.centre_out) % n;
+        let bufs = [&self.mark_i_buf, &self.mark_q_buf, &self.space_i_buf, &self.space_q_buf];
+        for (sum, buf) in self.centre_sums.iter_mut().zip(bufs) {
+            *sum += buf[enter] - buf[leave];
+        }
+        let [cmi, cmq, csi, csq] = self.centre_sums;
+        let (mi, mq) = (self.mark_i_sum + CENTRE_WEIGHT * cmi, self.mark_q_sum + CENTRE_WEIGHT * cmq);
+        let (si, sq) = (self.space_i_sum + CENTRE_WEIGHT * csi, self.space_q_sum + CENTRE_WEIGHT * csq);
+        let mark_mag2 = mi * mi + mq * mq;
+        let space_mag2 = si * si + sq * sq;
 
         // Slicer with hysteresis: only flip the held bit when the normalized
         // discriminator clearly favors the other tone. Around the noise floor
@@ -814,5 +843,124 @@ mod adjacent_tests {
             .map(|n| format!("{:.2}", avg(-40.0, None, *n)))
             .collect();
         println!("            {}", row.join("  "));
+    }
+}
+
+/// Copy on a fading HF path (Watterson two-path model, as HF modems are
+/// tested against): the case the tapered integration window is for.
+#[cfg(test)]
+mod fading_tests {
+    use super::*;
+    use crate::dsp::RttyTxGenerator;
+    use rand::{rngs::StdRng, Rng, SeedableRng};
+    use rustfft::{num_complex::Complex32, FftPlanner};
+
+    const SR: u32 = 12_000;
+    const TEXT: &str = "CQ TEST DE K6AC K6AC 599 05 CA TU DE W1AW 599 05 CT RR DE N5XX 599 04 TX";
+
+    /// Unit-power Rayleigh tap with a Gaussian Doppler spectrum of the given
+    /// spread (2σ), as a sum of sinusoids.
+    fn tap(rng: &mut StdRng, spread_hz: f32) -> impl Fn(f32) -> Complex32 {
+        let sigma = spread_hz / 2.0;
+        let comps: Vec<(f32, f32)> = (0..24)
+            .map(|_| {
+                // Box–Muller for the Doppler frequency.
+                let (u1, u2): (f32, f32) = (rng.gen_range(1e-7..1.0), rng.gen());
+                let f = (-2.0 * u1.ln()).sqrt() * (TAU * u2).cos() * sigma;
+                (f, rng.gen_range(0.0..TAU))
+            })
+            .collect();
+        move |t: f32| {
+            let mut z = Complex32::new(0.0, 0.0);
+            for &(f, ph) in &comps {
+                z += Complex32::from_polar(1.0, TAU * f * t + ph);
+            }
+            z / (comps.len() as f32).sqrt()
+        }
+    }
+
+    /// RTTY through two equal paths `delay_ms` apart, each fading with
+    /// `spread_hz` Doppler spread, plus white noise at `snr_db` (2500 Hz).
+    fn faded(delay_ms: f32, spread_hz: f32, snr_db: f32, seed: u64) -> Vec<f32> {
+        let mut g = RttyTxGenerator::new(SR, 2125.0, 2295.0, 45.45);
+        let spb = g.samples_per_bit();
+        let mut x = Vec::new();
+        g.next_samples((70.0 * spb) as usize, &mut x);
+        g.enqueue(&format!("  {TEXT}  "));
+        while !g.is_idle() {
+            g.next_samples(256, &mut x);
+        }
+        g.next_samples(SR as usize, &mut x);
+        // Analytic signal, so each path can be faded with a complex gain.
+        let n = x.len();
+        let mut fft = FftPlanner::<f32>::new();
+        let mut z: Vec<Complex32> = x.iter().map(|&v| Complex32::new(v, 0.0)).collect();
+        fft.plan_fft_forward(n).process(&mut z);
+        for (k, v) in z.iter_mut().enumerate() {
+            *v *= if k == 0 { 1.0 } else if k < (n + 1) / 2 { 2.0 } else { 0.0 } / n as f32;
+        }
+        fft.plan_fft_inverse(n).process(&mut z);
+        let mut rng = StdRng::seed_from_u64(seed);
+        let (g1, g2) = (tap(&mut rng, spread_hz), tap(&mut rng, spread_hz));
+        let d = (delay_ms * 1e-3 * SR as f32) as usize;
+        let p_sig = x.iter().map(|v| v * v).sum::<f32>() / n as f32;
+        let sigma = (p_sig / 10f32.powf(snr_db / 10.0) * (SR as f32 / 2.0) / 2500.0).sqrt();
+        (0..n)
+            .map(|i| {
+                let t = i as f32 / SR as f32;
+                let late = if i >= d { z[i - d] } else { Complex32::new(0.0, 0.0) };
+                let y = (g1(t) * z[i] + g2(t) * late).re * std::f32::consts::FRAC_1_SQRT_2;
+                let (u1, u2): (f32, f32) = (rng.gen_range(1e-7..1.0), rng.gen());
+                y + (-2.0 * u1.ln()).sqrt() * (TAU * u2).cos() * sigma
+            })
+            .collect()
+    }
+
+    /// Fraction of TEXT copied (best-aligned window, edit distance).
+    fn copy(out: &str) -> f32 {
+        let out: Vec<char> = out.split_whitespace().collect::<Vec<_>>().join(" ").chars().collect();
+        let t: Vec<char> = TEXT.chars().collect();
+        let lev = |a: &[char]| {
+            let mut prev: Vec<usize> = (0..=t.len()).collect();
+            for i in 1..=a.len() {
+                let mut cur = vec![i; t.len() + 1];
+                for j in 1..=t.len() {
+                    cur[j] = (prev[j] + 1).min(cur[j - 1] + 1).min(prev[j - 1] + (a[i - 1] != t[j - 1]) as usize);
+                }
+                prev = cur;
+            }
+            prev[t.len()]
+        };
+        let mut best = lev(&out);
+        for s in 0..out.len().saturating_sub(t.len()) {
+            best = best.min(lev(&out[s..(s + t.len()).min(out.len())]));
+        }
+        1.0 - best as f32 / t.len() as f32
+    }
+
+    fn mean_copy(delay_ms: f32, spread_hz: f32, snr_db: f32) -> f32 {
+        let seeds = [11, 12, 13, 14];
+        seeds
+            .iter()
+            .map(|&s| {
+                let x = faded(delay_ms, spread_hz, snr_db, s);
+                let cfg = RttyConfig { squelch: 0.0, ..RttyConfig::default() };
+                let mut d = RttyDemod::new(SR, cfg);
+                copy(&x.chunks(1024).map(|c| d.push(c)).collect::<String>())
+            })
+            .sum::<f32>()
+            / seeds.len() as f32
+    }
+
+    // A strong signal on a CCIR "poor" path (2 ms, 1 Hz) and a fluttery
+    // one (3 ms, 2 Hz). With the plain one-bit boxcar these sat at ~70%
+    // and ~65% copy however strong the signal — Ron's 40m experience.
+    #[test]
+    fn strong_signals_copy_through_multipath_fading() {
+        let poor = mean_copy(2.0, 1.0, 12.0);
+        let flutter = mean_copy(3.0, 2.0, 12.0);
+        eprintln!("copy at +12 dB: CCIR poor {poor:.2}, flutter {flutter:.2}");
+        assert!(poor > 0.8, "CCIR poor: {poor:.2}");
+        assert!(flutter > 0.8, "flutter: {flutter:.2}");
     }
 }

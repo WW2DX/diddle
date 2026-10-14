@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { layout, PRESETS } from "$lib/layout.svelte";
   import { onMount, onDestroy } from "svelte";
   import { getVersion } from "@tauri-apps/api/app";
   import {
@@ -153,6 +154,22 @@
       <span class="sim" title="contest simulator running — nothing goes to the radio">SIM</span>
     {/if}
   </div>
+
+  <select
+    class="layout-pick"
+    value=""
+    title="Screen layout presets — then fold panels (▾ at each one's top left) and drag the bottom-right corners to taste"
+    onchange={(e) => {
+      const el = e.target as HTMLSelectElement;
+      layout.apply(el.value);
+      el.value = "";
+    }}
+  >
+    <option value="" disabled>Layout…</option>
+    {#each Object.entries(PRESETS) as [id, p] (id)}
+      <option value={id} title={p.hint}>{p.label}</option>
+    {/each}
+  </select>
 
   <div class="score">
     <div class="stat">
@@ -313,5 +330,13 @@
     padding: 4px 16px;
     font-size: 12px;
     font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  }
+  .layout-pick {
+    background: #0c0e10;
+    border: 1px solid #2a2f33;
+    border-radius: 3px;
+    color: #8a949d;
+    font-size: 11px;
+    padding: 2px 4px;
   }
 </style>

@@ -13,7 +13,14 @@
 
   // Canvas dimensions. Width matches the half-spectrum (fft_size/2).
   const WIDTH = 1024;
-  const HEIGHT = 260;
+  // One canvas row per screen pixel of the (resizable) waterfall.
+  let height = $state(settings.waterfallHeight);
+  // A layout preset changes the saved height: follow it.
+  $effect(() => {
+    const h = settings.waterfallHeight;
+    if (Math.abs(h - height) > 2) height = h;
+  });
+
 
   // dB range — user-adjustable via sliders. Wide defaults so any audio scale
   // (normalized [-1,1] or raw int values stored in f32) produces a visible image.
@@ -101,6 +108,12 @@
   let sampleRate = $state(0);
   let rig = $state<RigState>({ freq: 0, mode: "", ptt: false });
 
+  // In DIGL/LSB the audio tone falls as RF rises, so a plain audio axis
+  // runs the opposite way to the radio's spectrum display. With
+  // `waterfallRf` on (the default) the waterfall is mirrored so RF rises
+  // left → right, like the radio.
+  let flipped = $derived(settings.waterfallRf && isLowerSideband(rig.mode));
+
   // "Live" = we've seen a spectrum frame within the last LIVE_WINDOW_MS.
   // The audio stream auto-starts when TCI is ready, so the operator never
   // needs to drive it manually; this just reports whether it's currently
@@ -163,7 +176,7 @@
 
   function renderRow(mags: ArrayLike<number>) {
     if (!ctx) return;
-    ctx.drawImage(canvas, 0, 1, WIDTH, HEIGHT - 1, 0, 0, WIDTH, HEIGHT - 1);
+    ctx.drawImage(canvas, 0, 1, WIDTH, height - 1, 0, 0, WIDTH, height - 1);
     const row = ctx.createImageData(WIDTH, 1);
     const px = row.data;
     const range = dbMax - dbMin || 1;
@@ -221,13 +234,13 @@
       t = t * t * (3 - 2 * t);
       const idx = (t * 255) | 0;
       const o = idx << 2;
-      const p = x << 2;
+      const p = (flipped ? WIDTH - 1 - x : x) << 2;
       px[p] = LUT[o];
       px[p + 1] = LUT[o + 1];
       px[p + 2] = LUT[o + 2];
       px[p + 3] = 255;
     }
-    ctx.putImageData(row, 0, HEIGHT - 1);
+    ctx.putImageData(row, 0, height - 1);
     lastFrameMin = fmin;
     lastFrameMax = fmax;
     lastFrameMean = fsum / visBins;
@@ -244,7 +257,7 @@
   function clearCanvas() {
     if (!ctx) return;
     ctx.fillStyle = "#000";
-    ctx.fillRect(0, 0, WIDTH, HEIGHT);
+    ctx.fillRect(0, 0, WIDTH, height);
   }
 
   onMount(async () => {
@@ -334,7 +347,8 @@
     const wrap = (e.currentTarget as HTMLElement).parentElement;
     if (!wrap) return null;
     const rect = wrap.getBoundingClientRect();
-    const frac = Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width));
+    let frac = Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width));
+    if (flipped) frac = 1 - frac;
     const clickHz = frac * viewSpanHz;
     let best: Overlay | null = null;
     for (const o of overlays) {
@@ -422,8 +436,20 @@
 
   // Map audio Hz → percent of the canvas width (for the marker overlay).
   function pctForAudioHz(hz: number): number {
-    return (hz / viewSpanHz) * 100;
+    const p = (hz / viewSpanHz) * 100;
+    return flipped ? 100 - p : p;
   }
+
+  // The radio's RX filter (when it reports one over TCI), as audio Hz, to
+  // shade what's outside it — a narrow filter that misses the tone pair is
+  // then plain to see.
+  let passband = $derived.by<[number, number] | null>(() => {
+    const lo = rig.filter_lo, hi = rig.filter_hi;
+    if (lo == null || hi == null) return null;
+    const [a, b] = isLowerSideband(rig.mode) ? [-hi, -lo] : [lo, hi];
+    const pa = pctForAudioHz(a), pb = pctForAudioHz(b);
+    return [Math.max(0, Math.min(pa, pb)), Math.min(100, Math.max(pa, pb))];
+  });
 
   let markPct = $derived(pctForAudioHz(rttyConfig.markHz));
   let spacePct = $derived(pctForAudioHz(rttyConfig.spaceHz));
@@ -664,10 +690,11 @@
     if (e.key !== "ArrowLeft" && e.key !== "ArrowRight") return;
     e.preventDefault();
     // ←/→ slide the signals left/right on screen. In DIGL a signal's audio
-    // tone rises with the dial, so "right" is dial up; in USB it's down.
+    // tone rises with the dial, so "right" is dial up; in USB, or with the
+    // waterfall mirrored to RF order, it's dial down.
     const right = e.key === "ArrowRight" ? 1 : -1;
     const step = dialStep(e);
-    nudgeDial(right * step * (isLowerSideband(rig.mode) ? 1 : -1));
+    nudgeDial(right * step * (isLowerSideband(rig.mode) && !flipped ? 1 : -1));
   }
 
   // Svelte attaches wheel handlers as passive, which would forbid
@@ -675,7 +702,28 @@
   $effect(() => {
     if (!canvasWrap) return;
     canvasWrap.addEventListener("wheel", onWaterfallWheel, { passive: false });
-    return () => canvasWrap.removeEventListener("wheel", onWaterfallWheel);
+    // Dragged taller/shorter: re-size the canvas to one row per pixel once
+    // the drag settles, and remember it.
+    let resizeTimer: ReturnType<typeof setTimeout> | null = null;
+    const ro = new ResizeObserver(() => {
+      if (resizeTimer) clearTimeout(resizeTimer);
+      resizeTimer = setTimeout(() => {
+        // The resize handle writes the new height into the inline style, in
+        // CSS px — unaffected by the UI zoom, unlike measured sizes.
+        const h = Math.round(parseFloat(canvasWrap.style.height));
+        if (!Number.isFinite(h)) return;
+        if (Math.abs(h - height) > 2) {
+          settings.setWaterfallHeight(h);
+          height = settings.waterfallHeight;
+        }
+      }, 200);
+    });
+    ro.observe(canvasWrap);
+    return () => {
+      canvasWrap.removeEventListener("wheel", onWaterfallWheel);
+      ro.disconnect();
+      if (resizeTimer) clearTimeout(resizeTimer);
+    };
   });
 
   // Click on the waterfall → set mark tone at that audio frequency.
@@ -684,7 +732,8 @@
     if (!canvas) return;
     const rect = canvas.getBoundingClientRect();
     const x = e.clientX - rect.left;
-    const fraction = Math.max(0, Math.min(1, x / rect.width));
+    let fraction = Math.max(0, Math.min(1, x / rect.width));
+    if (flipped) fraction = 1 - fraction;
     let audioHz = fraction * viewSpanHz;
 
     if (snapToPeak && lastMags.length > 0 && sampleRate > 0 && lastFftSize > 0) {
@@ -808,18 +857,29 @@
           {s.label}
         </button>
       {/each}
+      <button
+        class="ghost span"
+        class:active={settings.waterfallRf}
+        onclick={() => settings.setWaterfallRf(!settings.waterfallRf)}
+        title={settings.waterfallRf
+          ? "RF order: frequency rises left → right, like the radio's spectrum. Click for audio order (the tone pitch rises left → right)."
+          : "Audio order: tone pitch rises left → right (in DIGL that's RF falling). Click to match the radio's spectrum instead."}
+      >
+        {settings.waterfallRf ? "RF →" : "audio →"}
+      </button>
     </div>
   </div>
 
   <div class="freq-axis">
-    <span>{fmtMhz(rig.freq)}</span>
+    <span>{fmtMhz(flipped ? topFreqHz : rig.freq)}</span>
     <span class="dim">click → set mark · wheel/←→ → tune · {(rig.mode || "digl").toUpperCase()} · span {spanLabel(viewSpanHz)}</span>
-    <span>{fmtMhz(topFreqHz)}</span>
+    <span>{fmtMhz(flipped ? rig.freq : topFreqHz)}</span>
   </div>
 
   <!-- svelte-ignore a11y_no_noninteractive_tabindex, a11y_no_static_element_interactions -->
   <div
     class="canvas-wrap"
+    style="height: {height}px"
     bind:this={canvasWrap}
     tabindex="0"
     onkeydown={onWaterfallKey}
@@ -828,7 +888,7 @@
     <canvas
       bind:this={canvas}
       width={WIDTH}
-      height={HEIGHT}
+      height={height}
       onclick={handleClick}
     ></canvas>
     {#each peakHzs as hz, i}
@@ -859,6 +919,10 @@
         </button>
       {/if}
     {/each}
+    {#if passband}
+      <div class="outside-filter" style="left: 0; width: {passband[0]}%" title="Outside the radio's RX filter"></div>
+      <div class="outside-filter" style="left: {passband[1]}%; right: 0" title="Outside the radio's RX filter"></div>
+    {/if}
     <!-- Persistent tone band: the mark/space pair the decoder listens on and
          (unless AFC has split them) where we transmit. Always on screen so
          the operator can see where the next TX will land. -->
@@ -1007,6 +1071,7 @@
   }
 
   button.span {
+    white-space: nowrap;
     padding: 3px 8px;
     font-size: 11px;
   }
@@ -1041,12 +1106,22 @@
     padding: 0 2px 4px;
   }
 
+  /* Drag the bottom-right corner to make the waterfall taller or shorter. */
   .canvas-wrap {
     position: relative;
     width: 100%;
-    height: 260px;
+    resize: vertical;
+    overflow: hidden;
+    min-height: 60px;
   }
   .canvas-wrap:focus { outline: none; }
+  .outside-filter {
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    background: rgba(0, 0, 0, 0.55);
+    pointer-events: none;
+  }
   .canvas-wrap:focus-visible { outline: 1px solid #3a5a8a; outline-offset: -1px; }
 
   canvas {

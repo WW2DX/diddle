@@ -13,6 +13,18 @@ All notable changes to Diddle are documented here. Format loosely follows
   - **Cost:** the model is built into the app and runs in pure Rust (tract), about 4% of one CPU core.
   - **Licence:** DeepRTTY is AGPL-3.0; see `src-tauri/models/DEEPRTTY-NOTICE.md`.
 
+- **Type in the mark tone** (the number in the RX decoder header). This puts the tone pair where the radio's filter is, e.g. 1415 for a narrow filter centred on 1500 Hz.
+- **The radio's RX filter on the waterfall.** When the radio reports its filter over TCI, everything outside it is shaded. If the tone pair is well off the filter's centre, a **⇥ centre** button in the RX decoder moves the tones there.
+- **Receiver gain box** next to AGC, shown whenever the radio reports its AGC. TCI has no separate RF-gain control. With AGC on, turning this down caps the receiver gain, which is the way to let only the strongest caller in a pileup through.
+
+### Changed
+- **Classic decoder: far better copy on fading paths (40m).** Multipath smears each bit's tone a few ms into the next, and when the tone being sent is in a selective fade, that echo could outweigh it. Diddle averaged over the whole bit, so strong but fading signals had a hard error floor; MMTTY judges near the bit centre and didn't. The decoder now weights the middle of each bit more heavily.
+  - **Fading channels:** on simulated HF fading (Watterson model), character errors on a strong signal fell from 20% to 6.5% (CCIR "poor") and from 35% to 13% ("flutter"), level with MMTTY's demodulator run on the same audio.
+  - **Weak signals in plain noise:** slightly better than before.
+  - **DeepRTTY:** under fading it copies nearly perfectly from 0 dB up, so on 40m the Deep pane is worth watching.
+- **The waterfall runs in RF order by default.** Frequency now rises left → right like the radio's spectrum display; before, in DIGL it ran the other way. The **RF → / audio →** button next to the speed buttons switches between the two, and ←/→ keys still slide signals the way the arrows point.
+- **Fold any panel away, and layout presets.** The ▾ at the top left of the Waterfall, RX decoder, Entry, F-keys, Bandmap, Score and Log panels folds it to a one-line bar; click the bar to bring it back. A folded panel keeps running underneath, so the scrollback and decoders carry on. **Layout…** in the header offers three starting points: *Standard*, *Compact* (the most on one screen) and *Big RX window*. The Log and the undocked bandmap list now resize from their bottom-right corner too. All of this is remembered.
+- **Smaller waterfall and RX window by default** (140 and 165 px, from 260 and 220), so more of the operating panels fit on screen. Drag either one's bottom-right corner to resize it; the size is remembered.
 ### Changed
 - **Diddle is now licensed under the GNU AGPL v3.0 (AGPL-3.0-only)**, so it can include DeepRTTY, which is AGPL-3.0. Using, sharing and modifying Diddle is unchanged. Anyone who distributes a modified version, or runs one for users over a network, must publish its source under the same licence. Settings now ends with a short licence and source notice. Releases up to and including v0.1.30 remain MIT.
 

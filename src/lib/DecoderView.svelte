@@ -13,6 +13,7 @@
     type RigState,
   } from "$lib/tci";
   import { radioRx, RX_WIDTHS } from "$lib/radioRx.svelte";
+  import { isLowerSideband } from "$lib/freq";
   import { rttyConfig } from "$lib/rttyConfig.svelte";
   import { qsoLog } from "$lib/qsoLog.svelte";
   import { bandFromHz } from "$lib/bands";
@@ -40,6 +41,22 @@
     radioRx.follow(rig, rttyConfig.markHz, rttyConfig.spaceHz);
   });
   let agc = $derived(rig.agc_mode ?? null);
+  // The radio's filter centre in audio Hz (when it reports its filter), and
+  // whether the tone pair sits well off it.
+  let filterCentreHz = $derived.by(() => {
+    if (rig.filter_lo == null || rig.filter_hi == null) return null;
+    const c = (rig.filter_lo + rig.filter_hi) / 2;
+    return Math.abs(isLowerSideband(rig.mode) ? -c : c);
+  });
+  let pairOffFilter = $derived(
+    filterCentreHz != null &&
+      Math.abs((rttyConfig.markHz + rttyConfig.spaceHz) / 2 - filterCentreHz) > 40,
+  );
+  function centreInFilter() {
+    if (filterCentreHz == null) return;
+    const half = rttyConfig.shiftHz / 2;
+    rttyConfig.setMark(Math.round(rttyConfig.reverse ? filterCentreHz + half : filterCentreHz - half));
+  }
   let filterWidth = $derived(
     rig.filter_lo != null && rig.filter_hi != null ? rig.filter_hi - rig.filter_lo : null,
   );
@@ -241,6 +258,26 @@
     if (!deepScrollEl) return;
     deepAutoScroll = deepScrollEl.scrollHeight - deepScrollEl.scrollTop - deepScrollEl.clientHeight < 8;
   }
+
+  // Remember the RX text height when its corner is dragged. The resize
+  // handle writes the new height into the inline style, in CSS px.
+  $effect(() => {
+    const el = scrollEl;
+    if (!el) return;
+    let t: ReturnType<typeof setTimeout> | null = null;
+    const ro = new ResizeObserver(() => {
+      if (t) clearTimeout(t);
+      t = setTimeout(() => {
+        const h = parseFloat(el.style.height);
+        if (Number.isFinite(h)) settings.setRxHeight(h);
+      }, 200);
+    });
+    ro.observe(el);
+    return () => {
+      ro.disconnect();
+      if (t) clearTimeout(t);
+    };
+  });
 
   // Switch the backend decoder to match the saved setting.
   $effect(() => {
@@ -476,7 +513,20 @@
     <div class="tones">
       <span class="tone-pair">
         <span class="mark-dot">●</span>
-        <span class="num">{rttyConfig.markHz.toFixed(0)}</span>
+        <input
+          class="mark-input"
+          type="number"
+          min="300"
+          max="4000"
+          step="5"
+          value={rttyConfig.markHz.toFixed(0)}
+          title="Mark tone, Hz — type one in (Enter). Moves RX and TX together. Put the pair where your radio's filter is: e.g. 1415 for a filter centred on 1500 Hz."
+          onchange={(e) => {
+            const v = (e.target as HTMLInputElement).valueAsNumber;
+            if (v >= 300 && v <= 4000) rttyConfig.setMark(Math.round(v));
+            else (e.target as HTMLInputElement).value = rttyConfig.markHz.toFixed(0);
+          }}
+        />
         <span class="dim">/</span>
         <span class="num">{rttyConfig.spaceHz.toFixed(0)}</span>
         <span class="dim">Hz</span>
@@ -582,6 +632,15 @@
         title="Radio RX filter (over TCI). 500 and 250 are centred on the mark/space pair and follow it as you retune; they also hide the rest of the band from the waterfall and the bandmap. Wide puts back the radio's own filter.{filterWidth != null ? ` Radio now: ${filterWidth} Hz.` : ''}{radioRx.lastError ? ` — ${radioRx.lastError}` : ''}"
       >
         <span class="dim">filter:</span>
+        {#if pairOffFilter}
+          <button
+            class="shift-btn warn"
+            onclick={centreInFilter}
+            title="The tone pair is off the centre of the radio's filter ({filterCentreHz?.toFixed(0)} Hz). Click to move the tones (RX and TX) there."
+          >
+            ⇥ centre {filterCentreHz?.toFixed(0)}
+          </button>
+        {/if}
         {#each RX_WIDTHS as w}
           <button
             class="shift-btn"
@@ -602,14 +661,15 @@
             {m === "normal" ? "norm" : m}
           </button>
         {/each}
-        {#if agc === "off"}
+        {#if agc !== null || rig.agc_gain != null}
+          <span class="dim">gain</span>
           <input
             class="history-input"
             type="number"
             min="-20"
             max="120"
             value={rig.agc_gain ?? ""}
-            title="Receiver gain with AGC off, dB (−20 to 120)"
+            title="Receiver gain, dB (−20 to 120, TCI agc_gain). With AGC off it's the fixed gain; with AGC on, turning it down caps the gain — the way to let only the strongest caller in a pileup through. TCI has no separate RF-gain control."
             onchange={(e) => radioRx.setAgcGain((e.target as HTMLInputElement).valueAsNumber)}
           />
           <span class="dim">dB</span>
@@ -632,7 +692,7 @@
     <TuningScope />
     <div class="rx-wrap">
       <!-- svelte-ignore a11y_click_events_have_key_events, a11y_no_static_element_interactions -->
-      <div class="rx-text" bind:this={scrollEl} onscroll={onScroll} onclick={onTextClick}
+      <div class="rx-text" style="height: {settings.rxHeight}px" bind:this={scrollEl} onscroll={onScroll} onclick={onTextClick}
         >{@render segs(segments)}{#if pendingLine}<span class="pending">{pendingLine}</span>{/if}{#if segments.length === 0 && !pendingLine}{" "}{/if}</div
       >
       {#if !autoScroll}
@@ -704,7 +764,7 @@
   .deep-state.deep-unsupported, .deep-state.deep-error { color: #f87171; }
   .deep-head .ghost { margin-left: auto; }
   .rx-text.deep-text { height: 110px; border-color: #3b2a4f; }
-  .sq input { width: 110px; }
+  .sq input[type="range"] { width: 110px; }
   .sq-val { min-width: 2.5ch; text-align: right; }
 
   h2 {
@@ -725,6 +785,21 @@
     color: #8a949d;
   }
 
+  .mark-input {
+    width: 5ch;
+    background: transparent;
+    border: none;
+    border-bottom: 1px dashed #3a4452;
+    color: #e6e6e6;
+    font: inherit;
+    padding: 0;
+    -moz-appearance: textfield;
+    appearance: textfield;
+  }
+  .mark-input::-webkit-inner-spin-button,
+  .mark-input::-webkit-outer-spin-button { -webkit-appearance: none; margin: 0; }
+  .mark-input:focus { outline: none; border-bottom-color: #4ade80; }
+  .shift-btn.warn { border-color: #fbbf24; color: #fbbf24; }
   .tone-pair {
     display: flex;
     align-items: center;
@@ -820,8 +895,7 @@
     background: #0c0e10;
     border: 1px solid #1f2429;
     border-radius: 4px;
-    height: 220px;
-    min-height: 120px;
+    min-height: 60px;
     /* Drag the bottom edge to read more of the scrollback at once. */
     resize: vertical;
     overflow-y: auto;
