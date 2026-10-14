@@ -5,6 +5,8 @@ All notable changes to Diddle are documented here. Format loosely follows
 
 ## [Unreleased]
 
+## [0.1.32] — 2026-10-14
+
 ### Added
 - **JARL World Wide RTTY contest.**
   - **Exchange:** RST + operator age. Set **Age** in Settings; leave it blank to send 01, which JARL accepts instead. New `<AGE>` macro.
