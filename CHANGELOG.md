@@ -5,6 +5,8 @@ All notable changes to Diddle are documented here. Format loosely follows
 
 ## [Unreleased]
 
+## [0.1.33] — 2026-10-15
+
 ### Changed
 - **Better copy from the classic decoder on real signals.** It was tuned on two off-air recordings of W6IWI's numbered test loop (20m strong, 40m weak and fading), scored against the known text, as well as on the simulated noise, fading and adjacent-signal tests.
   - **Trapezoid integration window:** each bit is integrated over a window that weights its clean middle and tapers its edges, in place of the centre-weighted boxcar.
