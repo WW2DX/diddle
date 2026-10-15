@@ -11,3 +11,6 @@ node_modules
 !.env.example
 vite.config.js.timestamp-*
 vite.config.ts.timestamp-*
+
+# Off-air test recordings — kept locally, too big for the repo
+/*.wav

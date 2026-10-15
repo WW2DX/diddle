@@ -5,14 +5,23 @@
 //   is a steep bandpass around the pair — a neighbour 400 Hz away is down
 //   ~60 dB — so a strong station elsewhere in the passband no longer leaks
 //   into the correlators and raises the squelch floor over a weak one.
-// - Two quadrature correlators (NCOs at mark/space), integrated over one
-//   bit period with a tapered window: the whole bit, plus the middle half
-//   counted twice more. A plain one-bit boxcar is the best you can do in
-//   steady noise but not on a fading HF path: multipath smears each bit's
-//   tone a few ms into the next, and when the tone being sent is in a
-//   selective fade that echo can outweigh it. Weighting the clean middle of
-//   the bit cut errors on CCIR poor / flutter channels about in half, at no
-//   measurable cost in plain noise.
+// - Two quadrature correlators (NCOs at mark/space), integrated with a
+//   trapezoid window ~1.1 bits wide: two running sums in cascade, 0.6 and
+//   0.5 of a bit. A plain one-bit boxcar is best in steady noise but not on
+//   a fading HF path — multipath smears each bit's tone a few ms into the
+//   next, and when the tone being sent is in a selective fade that echo can
+//   outweigh it — and its sidelobes let a station 250 Hz away leak in. The
+//   trapezoid weights the clean middle of the bit and tapers the edges.
+//   Tuned on off-air recordings (W6IWI test loops, 20m and 40m) against
+//   simulated noise, fading and adjacent-signal tests: it beat the boxcar
+//   and a centre-weighted boxcar on the recordings and on a 250 Hz
+//   neighbour, held fading copy, and cost ~0.04 of copy on a weak signal
+//   in plain noise. Shorter windows copy the 40m recording better still,
+//   but at the cost of a crowded band.
+// - Fixed bit clock (45.45 baud as set). It used to adapt to observed
+//   transition spacing; on real fading audio that chased noise, and fixing
+//   it cut errors on the 40m recording by ~15%. Transmitters keep 45.45 Bd
+//   far closer than the decoder's timing tolerance.
 // - Slicer: bigger of mark vs. space magnitude → mark=1, space=0.
 // - Async-serial state machine: detect start bit (space after mark idle),
 //   sample data bits at samples-per-bit intervals at end of each bit
@@ -42,7 +51,9 @@ const LTRS_SHIFT: u8 = 0b11111; // 31
 //   X=29 V=30 LTRS=31.
 //
 // We emit '\n' for both CR (8) and LF (2) to flatten line-endings. BEL/WRU
-// codes are silenced ('\0' = no character emitted).
+// codes are silenced ('\0' = no character emitted). FIGURES are the US
+// teletype layout, as fldigi, MMTTY and N1MM use: FIGS+J is the apostrophe
+// and FIGS+S the bell (the international ITA2 layout swaps the two).
 #[rustfmt::skip]
 const BAUDOT_LTRS: [char; 32] = [
     '\0','E','\n','A',' ','S','I','U',
@@ -53,8 +64,8 @@ const BAUDOT_LTRS: [char; 32] = [
 
 #[rustfmt::skip]
 const BAUDOT_FIGS: [char; 32] = [
-    '\0','3','\n','-',' ','\'','8','7',
-    '\n','$','4','\0',',','!',':','(',
+    '\0','3','\n','-',' ','\0','8','7',
+    '\n','$','4','\'',',','!',':','(',
     '5','"',')','2','#','6','0','1',
     '9','?','&','\0','.','/',';','\0',
 ];
@@ -159,19 +170,8 @@ enum SerialState {
 }
 
 pub struct RttyDemod {
-    /// Live samples-per-bit estimate (adaptive — slowly tracks the
-    /// transmitter's actual baud rate based on observed transition spacing).
     samples_per_bit: f32,
     int_len: usize,
-
-    /// Sample index counter for transition timing.
-    total_samples: u64,
-    /// Sample index of the previous slicer transition during the current frame.
-    last_transition_sample: u64,
-    /// Bit value at the previous data-sample point (for transition detection).
-    prev_data_bit: bool,
-    /// Whether we have a valid `last_transition_sample` to measure from.
-    have_transition: bool,
 
     // Slow audio AGC. Normalizes long-term RMS so amplitude-relative
     // thresholds (noise floor estimate) and the bandpass operate in a
@@ -199,11 +199,11 @@ pub struct RttyDemod {
     space_i_sum: f32,
     space_q_sum: f32,
     buf_idx: usize,
-    // The same four sums over the middle half of the bit (see the header):
-    // samples enter at `centre_in` samples old and leave at `centre_out`.
-    centre_sums: [f32; 4],
-    centre_in: usize,
-    centre_out: usize,
+    // Second stage of the trapezoid window (see the header): a running sum
+    // of the first stage's four sums.
+    stage2_buf: Vec<[f32; 4]>,
+    stage2_sums: [f32; 4],
+    stage2_idx: usize,
 
     // Slicer with hysteresis. Normalized discriminator
     // (mark_mag2 - space_mag2) / (mark_mag2 + space_mag2) must cross
@@ -283,32 +283,21 @@ impl Phasor {
 // Lower hysteresis is OK now that AGC + bandpass clean up the noise
 // floor — the discriminator is much steadier, so 6% margin is enough.
 const HYST_THRESHOLD: f32 = 0.06;
-// Tapered integration window: the middle CENTRE_FRACTION of the bit gets
-// CENTRE_WEIGHT extra weight on top of the full-bit boxcar.
-const CENTRE_FRACTION: f32 = 0.5;
-const CENTRE_WEIGHT: f32 = 2.0;
+// Trapezoid integration window, as fractions of a bit: the two cascaded
+// running sums (see the header).
+const STAGE1_BITS: f32 = 0.6;
+const STAGE2_BITS: f32 = 0.5;
 // Squelch contrast averaging time, in bits: long enough to steady the noise
 // reading (99th percentile 0.67 at 3 bits vs 0.77 at 1), short enough that
 // a station's first character still opens it.
 const CONTRAST_BITS: f32 = 3.0;
-// Bit-clock adjustment: each observed transition during a frame updates
-// the running samples-per-bit estimate with this weight. Small enough that
-// noise spikes can't yank the estimate around; large enough to settle in a
-// few seconds of continuous signal.
-const BIT_CLOCK_ALPHA: f32 = 0.05;
-// Sanity range — only update when observed bits-between-transitions is
-// reasonable (1..=6 bit periods).
-const BIT_CLOCK_MAX_INTERVAL_BITS: f32 = 6.0;
-// Reject observed-vs-current ratios outside this window. Catches gross
-// outliers from noise or framing errors.
-const BIT_CLOCK_MAX_DEVIATION: f32 = 0.05;
 
 impl RttyDemod {
     pub fn new(sample_rate: u32, cfg: RttyConfig) -> Self {
         let sr = sample_rate as f32;
         let spb = sr / cfg.baud;
-        let int_len = spb.round() as usize;
-        let centre_len = (int_len as f32 * CENTRE_FRACTION).round() as usize;
+        let int_len = ((spb * STAGE1_BITS).round() as usize).max(1);
+        let stage2_len = ((spb * STAGE2_BITS).round() as usize).max(1);
 
         // Bandpass centered between mark and space. Bandwidth = shift + ~130 Hz
         // of margin, with a 300 Hz floor — fits both tones and their
@@ -329,10 +318,6 @@ impl RttyDemod {
             space_nco: Phasor::new(-(cfg.space_hz - center), sr),
             samples_per_bit: spb,
             int_len,
-            total_samples: 0,
-            last_transition_sample: 0,
-            prev_data_bit: true,
-            have_transition: false,
             agc,
             mark_i_buf: vec![0.0; int_len],
             mark_q_buf: vec![0.0; int_len],
@@ -343,9 +328,9 @@ impl RttyDemod {
             space_i_sum: 0.0,
             space_q_sum: 0.0,
             buf_idx: 0,
-            centre_sums: [0.0; 4],
-            centre_in: (int_len - centre_len) / 2,
-            centre_out: ((int_len - centre_len) / 2 + centre_len).min(int_len - 1),
+            stage2_buf: vec![[0.0; 4]; stage2_len],
+            stage2_sums: [0.0; 4],
+            stage2_idx: 0,
             last_bit: true, // idle line is mark
             contrast: 0.5,
             contrast_alpha: 1.0 / (CONTRAST_BITS * spb),
@@ -371,7 +356,6 @@ impl RttyDemod {
     }
 
     fn process_sample(&mut self, s: f32) -> Option<char> {
-        self.total_samples = self.total_samples.wrapping_add(1);
         // AGC first — normalizes long-term level.
         let s = self.agc.process(s);
 
@@ -407,18 +391,16 @@ impl RttyDemod {
         self.space_q_buf[idx] = sq;
         self.buf_idx = (idx + 1) % self.int_len;
 
-        // Middle-of-the-bit sums: slide a shorter window through the same
-        // buffers (the newest sample is at `idx`).
-        let n = self.int_len;
-        let enter = (idx + n - self.centre_in) % n;
-        let leave = (idx + n - self.centre_out) % n;
-        let bufs = [&self.mark_i_buf, &self.mark_q_buf, &self.space_i_buf, &self.space_q_buf];
-        for (sum, buf) in self.centre_sums.iter_mut().zip(bufs) {
-            *sum += buf[enter] - buf[leave];
+        // Second stage: a running sum of the first stage's sums — together
+        // a trapezoid window over the bit.
+        let first = [self.mark_i_sum, self.mark_q_sum, self.space_i_sum, self.space_q_sum];
+        let old = self.stage2_buf[self.stage2_idx];
+        for k in 0..4 {
+            self.stage2_sums[k] += first[k] - old[k];
         }
-        let [cmi, cmq, csi, csq] = self.centre_sums;
-        let (mi, mq) = (self.mark_i_sum + CENTRE_WEIGHT * cmi, self.mark_q_sum + CENTRE_WEIGHT * cmq);
-        let (si, sq) = (self.space_i_sum + CENTRE_WEIGHT * csi, self.space_q_sum + CENTRE_WEIGHT * csq);
+        self.stage2_buf[self.stage2_idx] = first;
+        self.stage2_idx = (self.stage2_idx + 1) % self.stage2_buf.len();
+        let [mi, mq, si, sq] = self.stage2_sums;
         let mark_mag2 = mi * mi + mq * mq;
         let space_mag2 = si * si + sq * sq;
 
@@ -451,9 +433,6 @@ impl RttyDemod {
                     // delay; wait the rest of the start bit before sampling.
                     self.state = SerialState::WaitStartEnd;
                     self.sample_counter = self.samples_per_bit * 0.5;
-                    // Frame starting fresh — reset transition history.
-                    self.have_transition = false;
-                    self.prev_data_bit = false; // start bit is space
                 }
                 None
             }
@@ -472,32 +451,6 @@ impl RttyDemod {
                 None
             }
             SerialState::Data => {
-                // Bit-clock micro-tracking: every observed slicer transition
-                // during the data bits gives us a new estimate of how many
-                // samples the transmitter is actually spending per bit.
-                if bit != self.prev_data_bit {
-                    if self.have_transition {
-                        let interval = self
-                            .total_samples
-                            .wrapping_sub(self.last_transition_sample)
-                            as f32;
-                        let n_bits = (interval / self.samples_per_bit).round();
-                        if n_bits >= 1.0 && n_bits <= BIT_CLOCK_MAX_INTERVAL_BITS {
-                            let observed = interval / n_bits;
-                            let dev = (observed - self.samples_per_bit).abs()
-                                / self.samples_per_bit;
-                            if dev < BIT_CLOCK_MAX_DEVIATION {
-                                self.samples_per_bit = self.samples_per_bit
-                                    * (1.0 - BIT_CLOCK_ALPHA)
-                                    + observed * BIT_CLOCK_ALPHA;
-                            }
-                        }
-                    }
-                    self.last_transition_sample = self.total_samples;
-                    self.have_transition = true;
-                    self.prev_data_bit = bit;
-                }
-
                 self.sample_counter -= 1.0;
                 if self.sample_counter <= 0.0 {
                     if bit {
@@ -695,6 +648,20 @@ mod tests {
         assert!(text.contains('E'), "expected 'E' in decoded text, got: {:?}", text);
     }
 
+    // US teletype layout: FIGS+J (code 11) is the apostrophe, FIGS+S
+    // (code 5) the bell, which prints nothing.
+    #[test]
+    fn us_layout_apostrophe_and_bell() {
+        let cfg = RttyConfig::default();
+        let sr = 48000u32;
+        let mut d = RttyDemod::new(sr, cfg.clone());
+        let mut signal = synth_char_signal(FIGS_SHIFT, &cfg, sr);
+        signal.extend(synth_char_signal(11, &cfg, sr));
+        signal.extend(synth_char_signal(5, &cfg, sr));
+        let text = d.push(&signal);
+        assert_eq!(text, "'", "got {text:?}");
+    }
+
     #[test]
     fn figs_shift_then_digit() {
         // FIGS shift, then code 22 = '0' (FIGS) / 'P' (LTRS).
@@ -801,6 +768,14 @@ mod adjacent_tests {
 
     fn avg(target_db: f32, off: Option<f32>, noise: f32) -> f32 {
         (0..3).map(|s| copy_score(target_db, off, noise, 7 + s)).sum::<f32>() / 3.0
+    }
+
+    // A station 250 Hz up puts its mark 80 Hz from our space. The one-bit
+    // boxcar's sidelobes let it in (0.84); the trapezoid window doesn't.
+    #[test]
+    fn copies_station_20db_under_neighbour_250hz_away() {
+        let c = avg(-20.0, Some(250.0), 0.02);
+        assert!(c > 0.88, "copy {c:.2}");
     }
 
     // Old single-biquad front end: 0.32 here (neighbour leaked in).

@@ -5,6 +5,18 @@ All notable changes to Diddle are documented here. Format loosely follows
 
 ## [Unreleased]
 
+### Changed
+- **Better copy from the classic decoder on real signals.** It was tuned on two off-air recordings of W6IWI's numbered test loop (20m strong, 40m weak and fading), scored against the known text, as well as on the simulated noise, fading and adjacent-signal tests.
+  - **Trapezoid integration window:** each bit is integrated over a window that weights its clean middle and tapers its edges, in place of the centre-weighted boxcar.
+  - **Fixed bit clock:** the clock no longer adapts to the signal; on real fading audio the adaptation chased noise.
+  - **Character errors on the recordings:** 3.3% → 2.7% on 20m and 44.6% → 37.2% on 40m. MMTTY's demodulator scored 3.8% / 44.1% on the same audio, DeepRTTY 0.5% / 16.9%.
+  - **Close neighbours:** a strong station 250 Hz away no longer leaks in (copy of a station 20 dB under it: 0.84 → 0.92).
+  - **Costs:** fading copy is unchanged; weak-signal copy in plain noise is a touch lower (0.83 → 0.79).
+  - **Bandmap spots:** the bandmap's spot decoder uses the same demodulator, so it gains too.
+
+### Fixed
+- **The apostrophe was lost in both directions.** Diddle used the international layout for the FIGS table (FIGS+S = apostrophe). US stations, and fldigi, MMTTY and N1MM, use FIGS+J, with FIGS+S as the bell. A received "DOG'S" printed as "DOGS", and an apostrophe Diddle sent didn't print at the other end. Both now use the US layout.
+
 ## [0.1.32] — 2026-10-14
 
 ### Added

@@ -21,8 +21,8 @@ const LTRS: [char; 32] = [
 
 #[rustfmt::skip]
 const FIGS: [char; 32] = [
-    '\0','3','\0','-',' ','\'','8','7',
-    '\r','$','4','\0',',','!',':','(',
+    '\0','3','\0','-',' ','\0','8','7',
+    '\r','$','4','\'',',','!',':','(',
     '5','"',')','2','#','6','0','1',
     '9','?','&','\0','.','/',';','\0',
 ];
@@ -306,5 +306,13 @@ mod loopback_tests {
         }
         let got = roundtrip(" CQ TEST DE W1AW W1AW K ", 24.0, 0.6);
         assert!(got.contains("W1AW"), "{got:?}");
+    }
+
+    // The apostrophe is FIGS+J in the US layout fldigi, MMTTY and N1MM use
+    // (W6IWI's "LAZY DOG'S BACK" test loop); both ends must agree on it.
+    #[test]
+    fn apostrophe_round_trips() {
+        let got = roundtrip(" THE LAZY DOG'S BACK ", 24.0, 0.6);
+        assert!(got.contains("DOG'S BACK"), "{got:?}");
     }
 }
