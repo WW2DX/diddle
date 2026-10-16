@@ -88,6 +88,12 @@ Each profile knows its Cabrillo `CONTEST:` name and builds the sent exchange fro
 - **ADIF** — standard `.adi` with `PROGRAMID: Diddle`, per-QSO RTTY records, and each exchange part in its own field the way N1MM+ and WriteLog import it: `CONTEST_ID`, `CQZ`, `ITUZ`, `STATE` / `VE_PROV`, `SRX`/`STX`, `NAME`, `PFX`, `COUNTRY`, `CONT`.
 - **Cabrillo 3.0** — header with the computed `CLAIMED-SCORE`, and `QSO:` lines in each contest's column layout (CQ WW: RST, zone, state/province or `DX`; Roundup: state/province or serial; NAQP: name + location; WPX: RST + serial).
 
+## QSOs to other software (UDP)
+
+- Each QSO you log is broadcast as you log it, in **WSJT-X** format (QSO Logged + Logged ADIF, with heartbeats; default port 2237) and/or **N1MM Logger+** contactinfo XML (default port 12060). That covers World Radio League's desktop app, Log4OM, GridTracker, JTAlert and N1MM-aware tools.
+- N1MM format also sends edits (contactreplace) and deletes (contactdelete).
+- Any number of host:port addresses per format, broadcast addresses included. Off until switched on in Settings.
+
 ## Super Check Partial (SCP)
 
 - **MASTER.SCP callsign database** for instant partial-call lookup as you type.

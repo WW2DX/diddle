@@ -9,6 +9,11 @@ All notable changes to Diddle are documented here. Format loosely follows
 - **The "⇥ centre" button showed with a normal wide filter.** It now appears only when it matters: a narrow filter (1 kHz or less) whose middle the tone pair is off, or a filter the pair isn't inside at all.
 
 ### Added
+- **QSOs to other software over UDP** (Settings → Send QSOs over UDP). Each QSO you log goes out as you log it, so World Radio League's desktop app, Log4OM, GridTracker, JTAlert or an N1MM-aware tool can pick it up.
+  - **WSJT-X format:** QSO Logged and Logged ADIF messages, with a heartbeat every 15 s. Default port 2237.
+  - **N1MM Logger+ format:** contactinfo XML with country, zone, points and multiplier flags, plus contactreplace for an edit and contactdelete for a delete. Default port 12060.
+  - **Addresses:** each format takes a list of host:port addresses, and broadcast addresses work. Both are off by default.
+  - **What's not sent:** bulk changes (ADIF import, Clear, switching logs).
 - **Screenshots in the README,** with the scripts that make them in `tools/screenshots`.
 
 ## [0.1.35] — 2026-10-16

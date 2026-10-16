@@ -10,6 +10,7 @@
   import { contestSetups } from "$lib/contestSetups.svelte";
   import { cty } from "$lib/ctyStore.svelte";
   import { chime } from "$lib/sound";
+  import { udpOut } from "$lib/udpOut.svelte";
   import { getVersion } from "@tauri-apps/api/app";
   import { openUrl } from "@tauri-apps/plugin-opener";
 
@@ -381,6 +382,53 @@
     {#if histError}
       <div class="scp-error">{histError}</div>
     {/if}
+  </div>
+
+  <div class="cluster">
+    <div class="cluster-info">
+      <span class="scp-label">Send QSOs over UDP</span>
+      <span class="hint">
+        Each QSO you log goes to other software as you log it — World Radio League, Log4OM, GridTracker,
+        JTAlert, N1MM-aware tools. Several addresses: separate with commas; a broadcast address works too.
+      </span>
+    </div>
+    <div class="udp-rows">
+      <label class="udp-row">
+        <input
+          type="checkbox"
+          checked={settings.udpWsjtx}
+          onchange={(e) => settings.setUdp({ wsjtx: (e.target as HTMLInputElement).checked })}
+        />
+        <span class="udp-kind" title="WSJT-X's UDP protocol: QSO Logged + Logged ADIF for each QSO, and a heartbeat every 15 s. What WRL's desktop app, Log4OM, GridTracker and JTAlert listen for (default port 2237).">WSJT-X format</span>
+        <input
+          class="udp-addrs"
+          type="text"
+          value={settings.udpWsjtxAddrs}
+          placeholder="127.0.0.1:2237"
+          spellcheck="false"
+          onchange={(e) => settings.setUdp({ wsjtxAddrs: (e.target as HTMLInputElement).value })}
+        />
+      </label>
+      <label class="udp-row">
+        <input
+          type="checkbox"
+          checked={settings.udpN1mm}
+          onchange={(e) => settings.setUdp({ n1mm: (e.target as HTMLInputElement).checked })}
+        />
+        <span class="udp-kind" title="N1MM Logger+ contactinfo XML: a packet per new QSO, contactreplace for an edit, contactdelete for a delete (default port 12060). For N1MM-aware loggers and contest tools.">N1MM format</span>
+        <input
+          class="udp-addrs"
+          type="text"
+          value={settings.udpN1mmAddrs}
+          placeholder="127.0.0.1:12060"
+          spellcheck="false"
+          onchange={(e) => settings.setUdp({ n1mmAddrs: (e.target as HTMLInputElement).value })}
+        />
+      </label>
+      {#if udpOut.lastStatus}
+        <div class="udp-status" class:err={udpOut.lastError}>Last: {udpOut.lastStatus}</div>
+      {/if}
+    </div>
   </div>
 
   <div class="cluster setups">
@@ -844,6 +892,22 @@
   .macros-head .hint {
     flex: 1;
   }
+  .udp-rows { display: flex; flex-direction: column; gap: 6px; }
+  .udp-row { display: flex; align-items: center; gap: 8px; font-size: 12px; color: #c5d1de; }
+  .udp-kind { width: 110px; }
+  .udp-addrs {
+    flex: 1;
+    max-width: 360px;
+    background: #0c0e10;
+    border: 1px solid #2a2f33;
+    border-radius: 3px;
+    color: #e6e6e6;
+    padding: 3px 6px;
+    font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+    font-size: 12px;
+  }
+  .udp-status { font-size: 11px; color: #4ade80; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
+  .udp-status.err { color: #f87171; }
   .macro-save { display: flex; align-items: center; gap: 10px; margin-top: 8px; }
   .macro-save .saved { color: #4ade80; font-size: 12px; }
   .stack-key { display: flex; align-items: center; gap: 6px; white-space: nowrap; color: #8a949d; font-size: 12px; }

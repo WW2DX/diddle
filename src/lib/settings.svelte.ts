@@ -35,6 +35,10 @@ interface Stored {
   rxHeight?: number; // RX decoder text, px
   waterfallRf?: boolean; // waterfall RF-up left→right, like the radio's spectrum
   txLevel?: number; // TX audio, % of full scale
+  udpWsjtx?: boolean; // broadcast QSOs in WSJT-X UDP format
+  udpWsjtxAddrs?: string;
+  udpN1mm?: boolean; // broadcast QSOs as N1MM contactinfo XML
+  udpN1mmAddrs?: string;
 }
 
 /// Windows whose text font the operator can pick.
@@ -103,6 +107,10 @@ class Settings {
   rxHeight = $state<number>(RX_HEIGHT_DEFAULT);
   waterfallRf = $state<boolean>(true);
   txLevel = $state<number>(60);
+  udpWsjtx = $state<boolean>(false);
+  udpWsjtxAddrs = $state<string>("127.0.0.1:2237");
+  udpN1mm = $state<boolean>(false);
+  udpN1mmAddrs = $state<string>("127.0.0.1:12060");
   loaded = $state(false);
 
   load() {
@@ -145,6 +153,10 @@ class Settings {
         if (obj.rxHeight) this.rxHeight = clampH(obj.rxHeight);
         if (obj.waterfallRf !== undefined) this.waterfallRf = obj.waterfallRf;
         if (obj.txLevel !== undefined) this.txLevel = Math.min(100, Math.max(1, obj.txLevel));
+        if (obj.udpWsjtx !== undefined) this.udpWsjtx = obj.udpWsjtx;
+        if (obj.udpWsjtxAddrs) this.udpWsjtxAddrs = obj.udpWsjtxAddrs;
+        if (obj.udpN1mm !== undefined) this.udpN1mm = obj.udpN1mm;
+        if (obj.udpN1mmAddrs) this.udpN1mmAddrs = obj.udpN1mmAddrs;
         if (obj.squelch !== undefined) this.squelch = Math.min(100, Math.max(0, obj.squelch));
       }
     } catch (e) {
@@ -187,6 +199,10 @@ class Settings {
           rxHeight: this.rxHeight,
           waterfallRf: this.waterfallRf,
           txLevel: this.txLevel,
+          udpWsjtx: this.udpWsjtx,
+          udpWsjtxAddrs: this.udpWsjtxAddrs,
+          udpN1mm: this.udpN1mm,
+          udpN1mmAddrs: this.udpN1mmAddrs,
         } satisfies Stored),
       );
     } catch (e) {
@@ -314,6 +330,14 @@ class Settings {
   setTxLevel(v: number, persist = true) {
     this.txLevel = Math.round(Math.min(100, Math.max(1, v)));
     if (persist) this.save();
+  }
+  /// UDP QSO broadcast: which format, and the host:port list it goes to.
+  setUdp(patch: { wsjtx?: boolean; wsjtxAddrs?: string; n1mm?: boolean; n1mmAddrs?: string }) {
+    if (patch.wsjtx !== undefined) this.udpWsjtx = patch.wsjtx;
+    if (patch.wsjtxAddrs !== undefined) this.udpWsjtxAddrs = patch.wsjtxAddrs.trim();
+    if (patch.n1mm !== undefined) this.udpN1mm = patch.n1mm;
+    if (patch.n1mmAddrs !== undefined) this.udpN1mmAddrs = patch.n1mmAddrs.trim();
+    this.save();
   }
   setWaterfallRf(v: boolean) {
     this.waterfallRf = v;

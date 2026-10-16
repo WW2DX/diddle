@@ -539,3 +539,23 @@ pub fn deep_rtty_status() -> crate::deep_rtty::DeepStatus {
 pub fn set_tx_level(level: f32) {
     crate::tci::set_tx_level(level);
 }
+
+/// Where to broadcast QSOs over UDP (WSJT-X and N1MM formats).
+#[tauri::command]
+pub fn udp_set_config(config: crate::udp_out::UdpConfig) {
+    crate::udp_out::set_config(config);
+}
+
+/// Broadcast a QSO that was just logged ("add"), edited ("replace") or
+/// deleted ("delete") in every enabled format.
+#[tauri::command]
+pub fn udp_send_qso(event: String, qso: crate::udp_out::UdpQso) -> Result<(), String> {
+    use crate::udp_out::QsoEvent;
+    let ev = match event.as_str() {
+        "add" => QsoEvent::Add,
+        "replace" => QsoEvent::Replace,
+        "delete" => QsoEvent::Delete,
+        other => return Err(format!("unknown QSO event {other:?}")),
+    };
+    crate::udp_out::send_qso(ev, &qso)
+}

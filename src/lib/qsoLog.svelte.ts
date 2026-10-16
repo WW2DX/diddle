@@ -152,13 +152,30 @@ class QsoLog {
       });
   }
 
+  /// Told about each QSO the operator logs, edits or deletes — one at a
+  /// time, not bulk changes (import, Clear, switching logs). The UDP
+  /// broadcaster hangs off this. "add" fires just before the QSO joins the
+  /// log, so "would it be a new multiplier?" still has its answer.
+  onChange: ((kind: "add" | "replace" | "delete", qso: Qso) => void) | null = null;
+
+  private notify(kind: "add" | "replace" | "delete", qso: Qso) {
+    try {
+      this.onChange?.(kind, qso);
+    } catch (e) {
+      console.error("qsoLog.onChange failed", e);
+    }
+  }
+
   add(qso: Qso) {
+    this.notify("add", qso);
     this.qsos = [...this.qsos, qso];
     this.nextSerial = this.nextSerial + 1;
     this.save();
   }
 
   remove(id: string) {
+    const gone = this.qsos.find((q) => q.id === id);
+    if (gone) this.notify("delete", gone);
     this.qsos = this.qsos.filter((q) => q.id !== id);
     // Recompute so deleting the most recent QSO (Ctrl-D) frees its serial
     // for the next contact instead of leaving a hole in the sequence.
@@ -167,13 +184,16 @@ class QsoLog {
   }
 
   update(id: string, patch: Partial<Qso>) {
-    let changed = false;
+    let changed: Qso | null = null;
     this.qsos = this.qsos.map((q) => {
       if (q.id !== id) return q;
-      changed = true;
-      return { ...q, ...patch };
+      changed = { ...q, ...patch };
+      return changed;
     });
-    if (changed) this.save();
+    if (changed) {
+      this.notify("replace", changed);
+      this.save();
+    }
   }
 
   clear() {

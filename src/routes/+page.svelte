@@ -15,6 +15,7 @@
   import ScorePanel from "$lib/ScorePanel.svelte";
   import PanelFrame from "$lib/PanelFrame.svelte";
   import { layout } from "$lib/layout.svelte";
+  import { udpOut } from "$lib/udpOut.svelte";
   import { cty } from "$lib/ctyStore.svelte";
   import { scpFile, historyFile } from "$lib/lookupFiles.svelte";
   import type { RigState } from "$lib/tci";
@@ -96,6 +97,15 @@
     setZoom(zoom + (e.deltaY < 0 ? 0.05 : -0.05));
   }
 
+  // UDP QSO broadcast settings → the backend.
+  $effect(() => {
+    settings.udpWsjtx;
+    settings.udpWsjtxAddrs;
+    settings.udpN1mm;
+    settings.udpN1mmAddrs;
+    if (settings.loaded) udpOut.configure();
+  });
+
   // The open log remembers which contest it's for, so reopening it later
   // brings the contest back (see Logbook).
   $effect(() => {
@@ -124,6 +134,7 @@
     contestSetups.load();
     qsoLog.load();
     cty.load();
+    udpOut.init();
     // SCP + call history files, whether or not Settings is ever opened.
     scpFile.init();
     historyFile.init();

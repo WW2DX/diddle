@@ -11,6 +11,7 @@ mod logbook;
 mod scp;
 mod simulator;
 mod tci;
+mod udp_out;
 mod wav_player;
 
 use std::sync::Arc;
@@ -84,6 +85,8 @@ pub fn run() {
             ipc::set_rtty_squelch,
             ipc::set_deep_rtty,
             ipc::set_tx_level,
+            ipc::udp_set_config,
+            ipc::udp_send_qso,
             ipc::deep_rtty_status,
             ipc::log_list,
             ipc::log_open,
