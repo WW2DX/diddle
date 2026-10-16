@@ -1,0 +1,37 @@
+[
+ {
+  "sent": "WW2DX DL1ABC DL1ABC",
+  "classic": "WW2DX DLQJ DLWQABC",
+  "deep": "WW2DX DL1ABC DL1ABC"
+ },
+ {
+  "sent": "JA1XYZ JA1XYZ",
+  "classic": "JA1XYZ JA1XSO",
+  "deep": "JA1XYZ JA1XYZ"
+ },
+ {
+  "sent": "TU 599 14 14 DL1ABC",
+  "classic": "TU 59314 14 DL1ABC",
+  "deep": "TU 599 14 14 DL1ABC"
+ },
+ {
+  "sent": "JA1XYZ 599 25 25",
+  "classic": "JA1QB 599 5 25",
+  "deep": "JA1XYZ 599 25 25"
+ },
+ {
+  "sent": "WW2DX F5ABC F5ABC",
+  "classic": "WW2DX F5ABC F5ABC",
+  "deep": "WW2DX F5ABC F5ABC"
+ },
+ {
+  "sent": "TU 599 14 14",
+  "classic": "TU 599 14 (",
+  "deep": "TU 599 14 14"
+ },
+ {
+  "sent": "QRZ? DE K4XYZ K4XYZ",
+  "classic": "QR XHK4XYZ K4XYZ",
+  "deep": "URZ DE K4XYZ K4XYZ"
+ }
+]

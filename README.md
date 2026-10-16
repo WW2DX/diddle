@@ -26,7 +26,29 @@ See **[FEATURES.md](FEATURES.md)** for the full feature list.
 
 ## Screenshots
 
-> _Coming soon._ (Header / waterfall / multi-decoder / entry window / logbook.)
+Running on 20m in CQ WW RTTY: waterfall with decoded call tags, the RX window beside the DeepRTTY pane, the entry window with two callers stacked, score, log, and the docked bandmap.
+
+![Diddle operating screen](docs/screenshots/operating.png)
+
+**Waterfall and RX.** Every decoded station gets a call tag: green for a new station, purple for a new multiplier, red and struck through for a dupe. A single click moves only the receive tones to an off-frequency caller (`M 2133`, while `TX 2125` holds the run frequency). Below, the classic decoder's copy of a fading signal sits next to DeepRTTY's, from the same audio.
+
+![Waterfall, RX window and DeepRTTY pane](docs/screenshots/waterfall-rx.png)
+
+**Entry and stack.** A caller right-clicked into Call, with his zone already predicted. Two more wait on the stack. A dupe right-click is refused, with a note saying why. Next to the F-keys are TX audio and Power.
+
+![Entry window, stack and F-keys](docs/screenshots/entry-stack.png)
+
+**Score and log.** Points, zones, countries and states by band, with the claimed score. Each contest is its own log and can be reopened later.
+
+![Score panel and logbook](docs/screenshots/score-log.png)
+
+<img src="docs/screenshots/bandmap.png" alt="Docked bandmap" width="420" align="right">
+
+**Bandmap.** Cluster spots (blue) and decoded stations (green), sorted by frequency around your own (YOU). New multipliers are highlighted, and stations you've worked are struck through.
+
+<br clear="right">
+
+<sub>The screenshots show Diddle's interface rendered with simulated band data, and the RX text is real output from Diddle's decoders on synthetic audio. See [tools/screenshots](tools/screenshots).</sub>
 
 ---
 

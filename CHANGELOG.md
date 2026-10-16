@@ -5,6 +5,12 @@ All notable changes to Diddle are documented here. Format loosely follows
 
 ## [Unreleased]
 
+### Fixed
+- **The "⇥ centre" button showed with a normal wide filter.** It now appears only when it matters: a narrow filter (1 kHz or less) whose middle the tone pair is off, or a filter the pair isn't inside at all.
+
+### Added
+- **Screenshots in the README,** with the scripts that make them in `tools/screenshots`.
+
 ## [0.1.35] — 2026-10-16
 
 ### Added
