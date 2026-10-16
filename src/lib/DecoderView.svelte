@@ -48,10 +48,18 @@
     const c = (rig.filter_lo + rig.filter_hi) / 2;
     return Math.abs(isLowerSideband(rig.mode) ? -c : c);
   });
-  let pairOffFilter = $derived(
-    filterCentreHz != null &&
-      Math.abs((rttyConfig.markHz + rttyConfig.spaceHz) / 2 - filterCentreHz) > 40,
-  );
+  // Offer "centre" when it matters: a narrow filter (≤ 1 kHz) whose middle
+  // the pair is off, or any filter the pair isn't inside at all. A normal
+  // wide filter has room to spare wherever the pair is.
+  let pairOffFilter = $derived.by(() => {
+    if (filterCentreHz == null || rig.filter_lo == null || rig.filter_hi == null) return false;
+    const width = rig.filter_hi - rig.filter_lo;
+    const lo = Math.min(rttyConfig.markHz, rttyConfig.spaceHz);
+    const hi = Math.max(rttyConfig.markHz, rttyConfig.spaceHz);
+    const inside = lo >= filterCentreHz - width / 2 && hi <= filterCentreHz + width / 2;
+    const off = Math.abs((lo + hi) / 2 - filterCentreHz) > 40;
+    return !inside || (width <= 1000 && off);
+  });
   function centreInFilter() {
     if (filterCentreHz == null) return;
     const half = rttyConfig.shiftHz / 2;
