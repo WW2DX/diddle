@@ -5,6 +5,8 @@ All notable changes to Diddle are documented here. Format loosely follows
 
 ## [Unreleased]
 
+## [0.1.34] — 2026-10-16
+
 ### Added
 - **Listen to an off-frequency caller without moving your transmit frequency.** In Run, a single click on the waterfall moves only the receive tones; a double click moves transmit too, for a new run frequency. When receive is split off, the TX marker shows where you're transmitting. Logging the QSO puts receive back on your run frequency for the next caller. In S&P one click still moves both, since you answer a CQ on his frequency.
 - **Alt+X drops the next caller off the stack,** before the TU sends him the exchange.
