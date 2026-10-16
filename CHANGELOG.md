@@ -5,6 +5,8 @@ All notable changes to Diddle are documented here. Format loosely follows
 
 ## [Unreleased]
 
+## [0.1.35] — 2026-10-16
+
 ### Added
 - **TX audio and Power sliders** in the F-keys panel ([#5](https://github.com/WW2DX/diddle/issues/5)).
   - **TX audio** sets the level of the audio Diddle sends the radio. It used to be fixed at 60% of full scale, which pins the ALC on some radios. Turn it down until ALC barely moves on transmit. It applies to every transmission and is remembered.
