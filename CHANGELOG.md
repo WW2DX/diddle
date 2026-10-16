@@ -5,6 +5,14 @@ All notable changes to Diddle are documented here. Format loosely follows
 
 ## [Unreleased]
 
+### Added
+- **TX audio and Power sliders** in the F-keys panel ([#5](https://github.com/WW2DX/diddle/issues/5)).
+  - **TX audio** sets the level of the audio Diddle sends the radio. It used to be fixed at 60% of full scale, which pins the ALC on some radios. Turn it down until ALC barely moves on transmit. It applies to every transmission and is remembered.
+  - **Power** sets the radio's RF output (TCI `drive`, 0–100) and shows what the radio reports.
+
+### Fixed
+- **The waterfall's speed and RF/audio buttons could run off the right edge** in a narrower window. That row now wraps.
+
 ## [0.1.34] — 2026-10-16
 
 ### Added

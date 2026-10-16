@@ -3,6 +3,24 @@
   import { settings } from "$lib/settings.svelte";
   import { macroState, keyLabel } from "$lib/macros.svelte";
   import { entryBus } from "$lib/entry.svelte";
+  import { setTxLevel, type RigState } from "$lib/tci";
+  import { radioRx } from "$lib/radioRx.svelte";
+
+  let { rig }: { rig: RigState } = $props();
+
+  // TX audio level → the backend, once settings are in and on every change.
+  $effect(() => {
+    if (!settings.loaded) return;
+    setTxLevel(settings.txLevel / 100).catch((e) => console.error("set_tx_level failed", e));
+  });
+
+  // RF power slider: follows the radio's reported value; while dragging,
+  // shows where it's going.
+  let driveDraft = $state<number | null>(null);
+  let driveShown = $derived(driveDraft ?? rig.drive ?? null);
+  function db(pct: number): string {
+    return (20 * Math.log10(Math.max(pct, 1) / 100)).toFixed(1);
+  }
 
   onMount(() => settings.load());
 
@@ -36,6 +54,41 @@
   <header>
     <h2>F-keys <span class="dim">(macros)</span></h2>
     <div class="settings">
+      <label
+        class="level"
+        title="TX audio level sent to the radio ({db(settings.txLevel)} dBFS). Turn it down until the radio's ALC barely moves on transmit — a pinned ALC splatters. Applies to every transmission; remembered."
+      >
+        TX audio
+        <input
+          type="range"
+          min="1"
+          max="100"
+          step="1"
+          value={settings.txLevel}
+          oninput={(e) => settings.setTxLevel((e.target as HTMLInputElement).valueAsNumber, false)}
+          onchange={(e) => settings.setTxLevel((e.target as HTMLInputElement).valueAsNumber)}
+        />
+        <span class="val">{settings.txLevel}%</span>
+      </label>
+      <label
+        class="level"
+        title="RF output power on the radio (TCI drive, 0–100). {rig.drive == null ? "The radio hasn't reported its power over TCI — the slider still sends it, if the server supports it." : "As the radio reports it."}"
+      >
+        Power
+        <input
+          type="range"
+          min="0"
+          max="100"
+          step="1"
+          value={driveShown ?? 50}
+          oninput={(e) => (driveDraft = (e.target as HTMLInputElement).valueAsNumber)}
+          onchange={(e) => {
+            radioRx.setDrive((e.target as HTMLInputElement).valueAsNumber);
+            driveDraft = null;
+          }}
+        />
+        <span class="val">{driveShown ?? "—"}</span>
+      </label>
       <label>
         my call
         <input
@@ -133,6 +186,18 @@
     width: 110px;
   }
   .settings input:focus { outline: none; border-color: #4a90e2; }
+  .settings .level input[type="range"] {
+    width: 90px;
+    padding: 0;
+    border: none;
+    background: none;
+  }
+  .settings .level .val {
+    min-width: 3.5ch;
+    text-align: right;
+    color: #e6e6e6;
+    font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  }
 
   .tx-indicator {
     color: #f87171;

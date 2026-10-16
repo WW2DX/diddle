@@ -1,4 +1,4 @@
 mod client;
 mod protocol;
 
-pub use client::{RigState, TciClient, TciState};
+pub use client::{set_tx_level, RigState, TciClient, TciState};

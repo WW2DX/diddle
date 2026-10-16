@@ -58,6 +58,12 @@ class RadioRx {
     void this.raw(`agc_mode:0,${mode};`);
   }
 
+  /// RF output power, 0–100 (TCI `drive`).
+  setDrive(pct: number) {
+    const d = Math.round(Math.min(100, Math.max(0, pct)));
+    void this.raw(`drive:0,${d};`);
+  }
+
   setAgcGain(db: number) {
     const g = Math.round(Math.min(120, Math.max(-20, db)));
     void this.raw(`agc_gain:0,${g};`);

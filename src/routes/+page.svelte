@@ -159,7 +159,7 @@
     <PanelFrame id="waterfall"><Waterfall /></PanelFrame>
     <PanelFrame id="decoder"><DecoderView {rig} /></PanelFrame>
     <PanelFrame id="entry"><EntryWindow {rig} /></PanelFrame>
-    <PanelFrame id="fkeys"><FKeys /></PanelFrame>
+    <PanelFrame id="fkeys"><FKeys {rig} /></PanelFrame>
     {#if !docked}
       <PanelFrame id="bandmap"><BandmapPanel {rig} /></PanelFrame>
     {/if}

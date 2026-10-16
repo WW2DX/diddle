@@ -83,6 +83,7 @@ pub fn run() {
             ipc::set_rtty_config,
             ipc::set_rtty_squelch,
             ipc::set_deep_rtty,
+            ipc::set_tx_level,
             ipc::deep_rtty_status,
             ipc::log_list,
             ipc::log_open,

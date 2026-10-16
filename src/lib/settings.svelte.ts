@@ -34,6 +34,7 @@ interface Stored {
   waterfallHeight?: number; // px
   rxHeight?: number; // RX decoder text, px
   waterfallRf?: boolean; // waterfall RF-up left→right, like the radio's spectrum
+  txLevel?: number; // TX audio, % of full scale
 }
 
 /// Windows whose text font the operator can pick.
@@ -101,6 +102,7 @@ class Settings {
   waterfallHeight = $state<number>(WATERFALL_HEIGHT_DEFAULT);
   rxHeight = $state<number>(RX_HEIGHT_DEFAULT);
   waterfallRf = $state<boolean>(true);
+  txLevel = $state<number>(60);
   loaded = $state(false);
 
   load() {
@@ -142,6 +144,7 @@ class Settings {
         if (obj.waterfallHeight) this.waterfallHeight = clampH(obj.waterfallHeight);
         if (obj.rxHeight) this.rxHeight = clampH(obj.rxHeight);
         if (obj.waterfallRf !== undefined) this.waterfallRf = obj.waterfallRf;
+        if (obj.txLevel !== undefined) this.txLevel = Math.min(100, Math.max(1, obj.txLevel));
         if (obj.squelch !== undefined) this.squelch = Math.min(100, Math.max(0, obj.squelch));
       }
     } catch (e) {
@@ -183,6 +186,7 @@ class Settings {
           waterfallHeight: this.waterfallHeight,
           rxHeight: this.rxHeight,
           waterfallRf: this.waterfallRf,
+          txLevel: this.txLevel,
         } satisfies Stored),
       );
     } catch (e) {
@@ -305,6 +309,11 @@ class Settings {
     if (h === this.rxHeight) return;
     this.rxHeight = h;
     this.save();
+  }
+  /// `persist` false while the slider is being dragged.
+  setTxLevel(v: number, persist = true) {
+    this.txLevel = Math.round(Math.min(100, Math.max(1, v)));
+    if (persist) this.save();
   }
   setWaterfallRf(v: boolean) {
     this.waterfallRf = v;

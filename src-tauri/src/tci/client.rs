@@ -76,8 +76,20 @@ impl TciFlavor {
         }
     }
 }
-// Stay below full scale so the radio's TX chain has headroom.
-const TX_AMPLITUDE: f32 = 0.6;
+// TX audio level, as a fraction of full scale (f32 bits). Operator-set
+// (F-keys panel → TX audio) because radios differ in how hot they take TCI
+// audio: too much and the ALC pins, splattering the signal. 0.6 is the old
+// fixed level.
+static TX_LEVEL: std::sync::atomic::AtomicU32 = std::sync::atomic::AtomicU32::new(0x3F19_999A); // 0.6
+
+pub fn set_tx_level(level: f32) {
+    let v = if level.is_finite() { level.clamp(0.0, 1.0) } else { 0.6 };
+    TX_LEVEL.store(v.to_bits(), Ordering::Relaxed);
+}
+
+fn tx_level() -> f32 {
+    f32::from_bits(TX_LEVEL.load(Ordering::Relaxed))
+}
 // Sideband our AFSK RTTY tones assume. We force the radio into DIGL on
 // connect and before every transmit so the operator never has to set it.
 const RTTY_MODE: &str = "digl";
@@ -142,6 +154,8 @@ pub struct RigState {
     /// gain while AGC is off).
     pub agc_mode: Option<String>,
     pub agc_gain: Option<i32>,
+    /// RF output power (TCI `drive`), 0–100, as the radio reports it.
+    pub drive: Option<i32>,
 }
 
 /// Wire-level TCI message event, emitted for the debug console.
@@ -525,8 +539,9 @@ impl TciClient {
         let mut mono = Vec::with_capacity(frames);
         let TxState::Live(live) = tx;
         live.generate(frames, &mut mono);
+        let level = tx_level();
         for s in mono.iter_mut() {
-            *s *= TX_AMPLITUDE;
+            *s *= level;
         }
         let mut out = Vec::with_capacity(requested_floats);
         for s in mono {
@@ -875,7 +890,7 @@ impl TciClient {
                 // Ask for the RX filter and AGC so the decoder panel shows
                 // the radio's settings (servers that don't know these
                 // commands just ignore them).
-                for c in ["rx_filter_band:0;", "agc_mode:0;", "agc_gain:0;"] {
+                for c in ["rx_filter_band:0;", "agc_mode:0;", "agc_gain:0;", "drive:0;"] {
                     let _ = self.send(c.to_string()).await;
                 }
                 // Force DIGL so AFSK RTTY lands on the expected sideband.
@@ -923,6 +938,12 @@ impl TciClient {
             "agc_mode" if m.arg_u8(0) == Some(0) => {
                 if let Some(mode) = m.arg_str(1) {
                     self.rig.write().await.agc_mode = Some(mode.to_ascii_lowercase());
+                    self.emit_rig().await;
+                }
+            }
+            "drive" if m.arg_u8(0) == Some(0) => {
+                if let Some(d) = m.arg_str(1).and_then(|v| v.parse::<f32>().ok()) {
+                    self.rig.write().await.drive = Some(d.round() as i32);
                     self.emit_rig().await;
                 }
             }

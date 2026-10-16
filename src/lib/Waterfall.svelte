@@ -1061,9 +1061,12 @@
     color: #c5d1de;
   }
 
+  /* Wraps rather than running off the edge in a narrower column. */
   .db-controls {
     display: flex;
-    gap: 24px;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 8px 24px;
     margin-bottom: 8px;
     font-size: 11px;
     color: #8a949d;
@@ -1074,7 +1077,7 @@
     display: flex;
     align-items: center;
     gap: 8px;
-    flex: 1;
+    flex: 1 1 160px;
   }
 
   .db-controls input[type="range"] {
@@ -1084,6 +1087,7 @@
 
   .span-buttons {
     display: flex;
+    flex-wrap: wrap;
     align-items: center;
     gap: 4px;
   }

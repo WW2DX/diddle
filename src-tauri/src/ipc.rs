@@ -533,3 +533,9 @@ pub fn set_deep_rtty(app: tauri::AppHandle, enabled: bool) {
 pub fn deep_rtty_status() -> crate::deep_rtty::DeepStatus {
     crate::deep_rtty::status()
 }
+
+/// TX audio level, 0–1 of full scale (applies to every transmission).
+#[tauri::command]
+pub fn set_tx_level(level: f32) {
+    crate::tci::set_tx_level(level);
+}

@@ -22,6 +22,8 @@ export interface RigState {
   /// Radio AGC: "normal" | "fast" | "off", and its gain in dB.
   agc_mode?: string | null;
   agc_gain?: number | null;
+  /// RF output power 0–100 (TCI `drive`), as the radio reports it.
+  drive?: number | null;
 }
 
 export const DEFAULT_TCI_URL = "ws://localhost:40001";
@@ -71,6 +73,11 @@ export async function txAbort(): Promise<void> {
 
 export async function sendRaw(raw: string): Promise<void> {
   await invoke("tci_send", { raw });
+}
+
+/// TX audio level, 0–1 of full scale.
+export async function setTxLevel(level: number): Promise<void> {
+  await invoke("set_tx_level", { level });
 }
 
 /// RX-window decoder squelch, 0 (open) to 100.
