@@ -1,6 +1,6 @@
 [package]
 name = "diddle"
-version = "0.1.35"
+version = "0.1.36"
 description = "RTTY contest logger — TCI-first, rate-focused"
 authors = ["lee@remotehamradio.com"]
 license = "AGPL-3.0-only"
