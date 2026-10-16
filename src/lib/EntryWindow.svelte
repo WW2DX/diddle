@@ -295,6 +295,19 @@
   $effect(() => {
     entryBus.currentCall = call;
   });
+  $effect(() => {
+    entryBus.currentBand = band;
+  });
+
+  // A right-click the stack refused (dupe, already stacked, stacked a
+  // moment ago): say why, briefly.
+  let lastStackNotice = 0;
+  $effect(() => {
+    const t = entryBus.stackNoticeToken;
+    if (t === lastStackNotice) return;
+    lastStackNotice = t;
+    flashNotice(entryBus.stackNotice);
+  });
 
   // A callsign clicked in the decoder window (or another panel) lands here.
   // Copy it into the Call field, restart the ESM sequence, and focus Exch so
@@ -437,6 +450,11 @@
     callSent = false;
     sentCall = "";
     exchFromHistory = false;
+    // Running: listen on our own frequency again for the next caller, if
+    // a click had moved the receive tones off to someone off-frequency.
+    if (!settings.spMode && Math.abs(rttyConfig.markHz - rttyConfig.txMarkHz) > 1) {
+      rttyConfig.setRxMark(rttyConfig.txMarkHz);
+    }
     queueMicrotask(() => callInput?.focus());
   }
 
@@ -550,6 +568,7 @@
   //   Ctrl+Enter  Log It: log Call + Exch as they stand, send nothing
   //               (N1MM-style; the way out of a botched ESM sequence)
   //   Ctrl/Alt+W  wipe the entry fields
+  //   Alt+X       drop the next caller off the stack
   //   Alt+U       toggle Run / S&P
   //   Ctrl+D      delete the most recent QSO (press twice to confirm)
   // e.code, not e.key, so macOS Alt dead-keys don't hide the shortcut.
@@ -589,6 +608,11 @@
     } else if (e.code === "KeyW" && (e.ctrlKey || e.altKey)) {
       e.preventDefault();
       clearForm();
+    } else if (e.code === "KeyX" && e.altKey && !e.ctrlKey) {
+      // Drop the next caller off the stack before he's sent the exchange.
+      e.preventDefault();
+      const gone = entryBus.dropFirst();
+      flashNotice(gone ? `${gone} dropped from the stack` : "Stack is empty");
     } else if (e.code === "KeyU" && e.altKey && !e.ctrlKey) {
       e.preventDefault();
       settings.toggleSpMode();
@@ -723,7 +747,7 @@
     <div class="stack" class:active={entryBus.nextQueue.length > 0}>
       <span
         class="stack-label"
-        title="Right-click callers in the RX window or on the waterfall to stack them. With ESM, Enter at the TU step sends {settings.stackTuKey}: TU, log, then the next caller and our exchange. Click a call to drop it."
+        title="Right-click callers in the RX window or on the waterfall to stack them (dupes, and calls stacked in the last 3 minutes, are refused). With ESM, Enter at the TU step sends {settings.stackTuKey}: TU, log, then the next caller and our exchange. Click a call, or press Alt+X, to drop the next one."
       >Stack</span>
       {#each entryBus.nextQueue as n, i}
         <button type="button" tabindex="-1" onmousedown={(e) => e.preventDefault()} class="next-chip" class:first={i === 0} title="Drop {n} from the stack" onclick={() => entryBus.dropNext(n)}>{n} ×</button>

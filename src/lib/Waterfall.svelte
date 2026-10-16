@@ -726,10 +726,27 @@
     };
   });
 
-  // Click on the waterfall → set mark tone at that audio frequency.
+  // Click on the waterfall → mark tone at that audio frequency. In Run a
+  // single click moves only the receive tones — listen to a caller who's
+  // off frequency while staying on your run frequency — and a double click
+  // moves transmit too (a new run frequency). In S&P one click moves both,
+  // since you answer a CQ on his frequency. Logging a Run QSO puts receive
+  // back on transmit for the next caller.
   // If snap-to-peak is on, find the loudest bin within ±SNAP_HZ.
   function handleClick(e: MouseEvent) {
-    if (!canvas) return;
+    const hz = clickHz(e);
+    if (hz === null) return;
+    if (settings.spMode) rttyConfig.setMark(hz);
+    else rttyConfig.setRxMark(hz);
+  }
+
+  function handleDblClick(e: MouseEvent) {
+    const hz = clickHz(e);
+    if (hz !== null) rttyConfig.setMark(hz);
+  }
+
+  function clickHz(e: MouseEvent): number | null {
+    if (!canvas) return null;
     const rect = canvas.getBoundingClientRect();
     const x = e.clientX - rect.left;
     let fraction = Math.max(0, Math.min(1, x / rect.width));
@@ -752,7 +769,7 @@
       }
       audioHz = bestBin * binHz;
     }
-    rttyConfig.setMark(Math.round(audioHz));
+    return Math.round(audioHz);
   }
 
   function fmtMhz(hz: number): string {
@@ -872,7 +889,7 @@
 
   <div class="freq-axis">
     <span>{fmtMhz(flipped ? topFreqHz : rig.freq)}</span>
-    <span class="dim">click → set mark · wheel/←→ → tune · {(rig.mode || "digl").toUpperCase()} · span {spanLabel(viewSpanHz)}</span>
+    <span class="dim">{settings.spMode ? "click → set mark" : "click → listen · dbl-click → move TX too"} · wheel/←→ → tune · {(rig.mode || "digl").toUpperCase()} · span {spanLabel(viewSpanHz)}</span>
     <span>{fmtMhz(flipped ? rig.freq : topFreqHz)}</span>
   </div>
 
@@ -890,6 +907,7 @@
       width={WIDTH}
       height={height}
       onclick={handleClick}
+      ondblclick={handleDblClick}
     ></canvas>
     {#each peakHzs as hz, i}
       {@const pct = pctForAudioHz(hz)}

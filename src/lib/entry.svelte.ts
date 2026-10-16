@@ -12,6 +12,12 @@
 // macros fired from the F-keys (when ESM is off, with no per-QSO context)
 // can still expand <CALL>.
 
+import { qsoLog } from "./qsoLog.svelte";
+
+/// A call can't be stacked again this soon after it last was (unless it
+/// was dropped from the stack on purpose).
+const RESTACK_AFTER_MS = 3 * 60_000;
+
 class EntryBus {
   requestedCall = $state<string>("");
   token = $state<number>(0);
@@ -39,15 +45,40 @@ class EntryBus {
   /// call chip that was just right-clicked.
   queueToken = $state<number>(0);
 
+  /// Band of the QSO in the entry form (EntryWindow mirrors it here), for
+  /// refusing dupes.
+  currentBand = $state<string>("");
+  /// Why the last right-click was refused, for EntryWindow to flash.
+  stackNotice = $state<string>("");
+  stackNoticeToken = $state<number>(0);
+  // When each call was last stacked: a caller right-clicked twice in the
+  // same pileup must not come round again once he's been worked or wiped.
+  private stackedAt = new Map<string, number>();
+
+  private refuse(why: string) {
+    this.stackNotice = why;
+    this.stackNoticeToken++;
+  }
+
   queueNext(c: string) {
     const call = c.trim().toUpperCase();
     if (!call) return;
+    this.queueToken++;
+    const now = Date.now();
+    if (call === this.currentCall.trim().toUpperCase()) return;
+    if (this.nextQueue.includes(call)) return this.refuse(`${call} is already on the stack`);
+    if (this.currentBand && qsoLog.isDupe(call, this.currentBand)) {
+      return this.refuse(`${call} already worked on ${this.currentBand} — not stacked`);
+    }
+    const at = this.stackedAt.get(call);
+    if (at !== undefined && now - at < RESTACK_AFTER_MS) {
+      return this.refuse(`${call} was stacked ${Math.max(1, Math.round((now - at) / 1000))} s ago — not again`);
+    }
+    this.stackedAt.set(call, now);
     if (!this.currentCall.trim()) {
       this.setCall(call, "call");
       return;
     }
-    this.queueToken++;
-    if (call === this.currentCall.trim().toUpperCase() || this.nextQueue.includes(call)) return;
     this.nextQueue = [...this.nextQueue, call];
   }
 
@@ -57,8 +88,21 @@ class EntryBus {
     return first;
   }
 
+  /// Drop a call from the stack (click on it). Dropping on purpose lets him
+  /// be stacked again straight away.
   dropNext(c: string) {
     this.nextQueue = this.nextQueue.filter((x) => x !== c);
+    this.stackedAt.delete(c);
+  }
+
+  /// Drop the call at the head of the stack — the one the next TU would
+  /// send the exchange to (Alt+X).
+  dropFirst(): string | undefined {
+    const [first, ...rest] = this.nextQueue;
+    if (first === undefined) return undefined;
+    this.nextQueue = rest;
+    this.stackedAt.delete(first);
+    return first;
   }
 
   clearNext() {
