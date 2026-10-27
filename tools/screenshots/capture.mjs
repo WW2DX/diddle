@@ -55,7 +55,10 @@ const B = boxes;
 await shot("operating", 0, 0, W, B.log.y + B.log.h + 16);
 await shot("waterfall-rx", B.wf.x - pad, B.wf.y - pad, B.wf.w + 2 * pad, B.rx.y + B.rx.h - B.wf.y + 2 * pad);
 await shot("entry-stack", B.entry.x - pad, B.entry.y - pad, B.entry.w + 2 * pad, B.fkeys.y + B.fkeys.h - B.entry.y + 2 * pad);
-await shot("score-log", B.score.x - pad, B.score.y - pad, B.score.w + 2 * pad, B.log.y + B.log.h - B.score.y + 2 * pad);
+// Score sits above the bandmap in the side column, so it and the log are
+// separate shots.
+await shot("score", B.score.x - pad, B.score.y - pad, B.score.w + 2 * pad, B.score.h + 2 * pad);
+await shot("log", B.log.x - pad, B.log.y - pad, B.log.w + 2 * pad, B.log.h + 2 * pad);
 // Bandmap: around our frequency, where the live spots are.
 const bmTop = Math.max(B.bandmap.y, B.here.y - 300);
 await shot("bandmap", B.bandmap.x - pad, bmTop - pad, B.bandmap.w + 2 * pad, 560 + 2 * pad);

@@ -20,7 +20,7 @@ Most RTTY contesting setups glue together MMTTY/2Tone + N1MM + a FSK keying inte
 - **The whole band, decoded at once.** A multi-decoder watches the waterfall and surfaces callsigns as clickable tags — click to QSY and work them.
 - **Built for rate.** N1MM-style ESM (Enter Sends Message), Super Check Partial, DX cluster spots, and contest-aware exchange macros keep your hands on the keyboard.
 
-See **[FEATURES.md](FEATURES.md)** for the full feature list.
+See **[FEATURES.md](FEATURES.md)** for the full feature list, and the **[User Manual](docs/manual/README.md)** for how to use it all.
 
 ---
 
@@ -38,9 +38,13 @@ Running on 20m in CQ WW RTTY: waterfall with decoded call tags, the RX window be
 
 ![Entry window, stack and F-keys](docs/screenshots/entry-stack.png)
 
-**Score and log.** Points, zones, countries and states by band, with the claimed score. Each contest is its own log and can be reopened later.
+**Score.** Points, zones, countries and states by band, with the claimed score, the rate, and the multipliers still needed on the band you're on.
 
-![Score panel and logbook](docs/screenshots/score-log.png)
+![Score panel](docs/screenshots/score.png)
+
+**Log.** Each contest is its own log and can be reopened later.
+
+![Logbook](docs/screenshots/log.png)
 
 <img src="docs/screenshots/bandmap.png" alt="Docked bandmap" width="420" align="right">
 
@@ -78,6 +82,8 @@ To build from source instead, see **[BUILD.md](BUILD.md)**.
 3. **Open Settings** (bottom panel) and fill in your operator info — callsign, name, state/province, CQ zone, grid — and pick your **contest**.
 4. **Tune to a RTTY signal.** The decoder view shows demodulated text; the waterfall shows callsign tags from the multi-decoder.
 5. **Work stations.** With **ESM** on, `Enter` steps through CQ → exchange → TU + log automatically.
+
+The **[User Manual](docs/manual/README.md)** covers every panel, setting and key in detail.
 
 > **No radio handy?** Open the **Test** panel at the bottom: the built-in **contest simulator** puts a synthetic pileup through the real decoder (press F1 and work what answers), or select an **audio input** device to decode an external source such as [RTTY Runner](https://github.com/opalito/RTTYRunner) routed through a virtual audio cable.
 

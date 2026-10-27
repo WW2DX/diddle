@@ -129,8 +129,6 @@ Each profile knows its Cabrillo `CONTEST:` name and builds the sent exchange fro
 
 Rough and subject to change — ideas, not promises:
 
-- [ ] Real-time dupe checking + mult tracking with on-screen needed/worked status
-- [ ] Per-band/per-mode score window and rate meter
 - [ ] N1MM-compatible / SO2R and second-radio support
 - [ ] Configurable RTTY parameters in the UI (baud, shift, tones, USB/LSB)
 - [ ] Click-to-decode: spawn a decoder on any waterfall click
@@ -138,6 +136,6 @@ Rough and subject to change — ideas, not promises:
 - [ ] Log import (ADIF) and merge
 - [ ] Code signing / notarization for macOS & Windows installers
 - [ ] Skimmer integration
-- [ ] In-app screenshots & docs
+- [ ] In-app help (the [User Manual](docs/manual/README.md) covers it for now)
 
 Have a request? [Open an issue](https://github.com/WW2DX/diddle/issues).
