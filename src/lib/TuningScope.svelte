@@ -98,6 +98,20 @@
     repeatTimer = null;
   }
 
+  // Shift+PgUp/PgDn nudge from anywhere, so the hands can stay on the
+  // keyboard (and the page doesn't scroll instead).
+  function onKey(e: KeyboardEvent) {
+    if (e.key !== "PageUp" && e.key !== "PageDown") return;
+    if (!e.shiftKey || e.ctrlKey || e.metaKey || e.altKey) return;
+    if ((e.target as HTMLElement | null)?.tagName === "TEXTAREA") return;
+    e.preventDefault();
+    nudge(e.key === "PageUp" ? 1 : -1);
+  }
+  $effect(() => {
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  });
+
   onDestroy(() => {
     unlisten?.();
     stopNudge();
@@ -110,7 +124,7 @@
   <div class="nudge">
     <button
       type="button"
-      title="Nudge mark down {NUDGE_HZ} Hz (hold to repeat)"
+      title="Nudge mark down {NUDGE_HZ} Hz (hold to repeat; Shift+PgDn)"
       onpointerdown={() => startNudge(-1)}
       onpointerup={stopNudge}
       onpointerleave={stopNudge}
@@ -119,7 +133,7 @@
     <span class="hz">{rttyConfig.markHz.toFixed(0)}</span>
     <button
       type="button"
-      title="Nudge mark up {NUDGE_HZ} Hz (hold to repeat)"
+      title="Nudge mark up {NUDGE_HZ} Hz (hold to repeat; Shift+PgUp)"
       onpointerdown={() => startNudge(1)}
       onpointerup={stopNudge}
       onpointerleave={stopNudge}

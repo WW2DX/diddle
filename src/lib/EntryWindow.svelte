@@ -150,7 +150,7 @@
     suggestions = [];
     suggestionIdx = -1;
     lookupHistory(s);
-    queueMicrotask(() => exchInput?.focus());
+    queueMicrotask(() => exchInput?.focus({ preventScroll: true }));
   }
 
   // ESM (Enter Sends Message) — N1MM-style stepped Enter. The steps differ
@@ -188,13 +188,13 @@
         // the Call field to type his when he comes back.
         macroState.fire("F4"); // "DE <MYCALL>"
         callSent = true;
-        queueMicrotask(() => callInput?.focus());
+        queueMicrotask(() => callInput?.focus({ preventScroll: true }));
       } else if (!callSent || (needsExch && ex.length === 0)) {
         // Our call — and again on each Enter until he comes back to us.
         macroState.fire("F4", { call: c }); // "DE <MYCALL>"
         callSent = true;
         sentCall = c;
-        queueMicrotask(() => exchInput?.focus());
+        queueMicrotask(() => exchInput?.focus({ preventScroll: true }));
       } else {
         macroState.fire("F2", { call: c }); // our exchange
         exchSent = true;
@@ -212,7 +212,7 @@
       macroState.fire("F2", { call: c });
       exchSent = true;
       sentCall = c;
-      queueMicrotask(() => exchInput?.focus());
+      queueMicrotask(() => exchInput?.focus({ preventScroll: true }));
     } else if (entryBus.nextQueue.length) {
       // Callers stacked: the stack-TU macro thanks this one, logs him
       // (<LOGIT>), loads the next (<POPSTACK>) and sends him our exchange,
@@ -329,21 +329,27 @@
     const t = entryBus.queueToken;
     if (t === lastQueueToken) return;
     lastQueueToken = t;
-    queueMicrotask(() => (exchSent ? exchInput : callInput)?.focus());
+    queueMicrotask(() => (exchSent ? exchInput : callInput)?.focus({ preventScroll: true }));
   });
 
   // Put a callsign in the Call field as a fresh station (clicked spot,
   // stack) and get ready for his exchange — or, for a caller right-clicked
   // into an empty Call, leave focus on Call so the next Enter sends him ours.
+  // Clicking the call already in the form again (confirming it mid-pileup)
+  // keeps his exchange: wiping it made the next ESM Enter send our exchange
+  // again instead of TU.
   function loadCall(c: string, focus: "call" | "exch" = "exch") {
+    const same = c === normalizeCall(call);
     noteCallChanged(c);
     call = c;
-    exchRcvd = "";
-    exchFromHistory = false;
+    if (!same) {
+      exchRcvd = "";
+      exchFromHistory = false;
+      lookupHistory(c);
+    }
     suggestions = [];
     suggestionIdx = -1;
-    lookupHistory(c);
-    queueMicrotask(() => (focus === "call" ? callInput : exchInput)?.focus());
+    queueMicrotask(() => (focus === "call" ? callInput : exchInput)?.focus({ preventScroll: true }));
   }
 
   // An exchange word clicked in the decoder window. Builds the exchange a
@@ -365,7 +371,7 @@
     }
     exchFromHistory = false;
     queueMicrotask(() => {
-      exchInput?.focus();
+      exchInput?.focus({ preventScroll: true });
       const n = exchInput?.value.length ?? 0;
       exchInput?.setSelectionRange(n, n);
     });
@@ -394,7 +400,7 @@
       logQso();
     } else if (normalizeCall(call).length >= 3) {
       flashNotice("TU sent — NOT logged: Exch is empty");
-      queueMicrotask(() => exchInput?.focus());
+      queueMicrotask(() => exchInput?.focus({ preventScroll: true }));
     }
   });
 
@@ -455,7 +461,7 @@
     if (!settings.spMode && Math.abs(rttyConfig.markHz - rttyConfig.txMarkHz) > 1) {
       rttyConfig.setRxMark(rttyConfig.txMarkHz);
     }
-    queueMicrotask(() => callInput?.focus());
+    queueMicrotask(() => callInput?.focus({ preventScroll: true }));
   }
 
   function clearForm() {
@@ -466,7 +472,7 @@
     callSent = false;
     sentCall = "";
     exchFromHistory = false;
-    callInput?.focus();
+    callInput?.focus({ preventScroll: true });
   }
 
   // Digits (and a dot) only → the operator is typing a frequency; keep it
@@ -543,7 +549,7 @@
       const order = [callInput, rstInput, exchInput];
       const i = order.indexOf(e.target as HTMLInputElement);
       const next = order[(i + (e.shiftKey ? order.length - 1 : 1)) % order.length];
-      next?.focus();
+      next?.focus({ preventScroll: true });
       if (next === callInput) next?.select();
     } else if (e.key === " ") {
       // Space toggles between Call and Exch. From Exch it only jumps when
@@ -552,13 +558,13 @@
       const t = e.target as HTMLElement;
       if (t === callInput) {
         e.preventDefault();
-        exchInput?.focus();
+        exchInput?.focus({ preventScroll: true });
       } else if (
         t === rstInput ||
         (t === exchInput && exchRcvd.trim().length === 0)
       ) {
         e.preventDefault();
-        callInput?.focus();
+        callInput?.focus({ preventScroll: true });
         callInput?.select();
       }
     }

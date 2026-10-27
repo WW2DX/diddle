@@ -320,7 +320,9 @@
   });
 
   // Click a spot/label: load its call into the entry form AND QSY onto it.
+  // Going to answer somebody else's CQ, so switch to S&P.
   function pickSpot(call: string, abs_hz: number) {
+    settings.setSpMode(true);
     if (call) entryBus.setCall(call);
     qsyToAbs(abs_hz);
   }
@@ -679,14 +681,24 @@
     nudgeDial(-steps * dialStep(e));
   }
 
+  // PgUp/PgDn tune the dial from anywhere — not only with the waterfall
+  // focused — like the radio's 1 kHz step: Page Up = dial up. Left to the
+  // browser they scroll the whole page, which is never what's wanted
+  // mid-contest. Shift+PgUp/PgDn belong to the tuning window's nudge.
+  function onGlobalKey(e: KeyboardEvent) {
+    if (e.key !== "PageUp" && e.key !== "PageDown") return;
+    if (e.ctrlKey || e.metaKey || e.altKey || e.shiftKey) return;
+    if ((e.target as HTMLElement | null)?.tagName === "TEXTAREA") return;
+    e.preventDefault();
+    nudgeDial(e.key === "PageUp" ? DIAL_BIG_HZ : -DIAL_BIG_HZ);
+  }
+  $effect(() => {
+    window.addEventListener("keydown", onGlobalKey);
+    return () => window.removeEventListener("keydown", onGlobalKey);
+  });
+
   function onWaterfallKey(e: KeyboardEvent) {
     if (e.ctrlKey || e.metaKey) return;
-    if (e.key === "PageUp" || e.key === "PageDown") {
-      // Like the radio's 1 kHz step: Page Up = dial up.
-      e.preventDefault();
-      nudgeDial(e.key === "PageUp" ? DIAL_BIG_HZ : -DIAL_BIG_HZ);
-      return;
-    }
     if (e.key !== "ArrowLeft" && e.key !== "ArrowRight") return;
     e.preventDefault();
     // ←/→ slide the signals left/right on screen. In DIGL a signal's audio
@@ -900,7 +912,7 @@
     bind:this={canvasWrap}
     tabindex="0"
     onkeydown={onWaterfallKey}
-    title="Wheel or ←/→ tunes the radio ({DIAL_STEP_HZ} Hz; Shift = {DIAL_COARSE_HZ} Hz; Alt/Option = 1 kHz; PgUp/PgDn = ±1 kHz)"
+    title="Wheel or ←/→ tunes the radio ({DIAL_STEP_HZ} Hz; Shift = {DIAL_COARSE_HZ} Hz; Alt/Option = 1 kHz; PgUp/PgDn = ±1 kHz from anywhere)"
   >
     <canvas
       bind:this={canvas}

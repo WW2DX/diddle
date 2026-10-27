@@ -1,9 +1,11 @@
 <script lang="ts">
   // Band summary + score for the active contest: QSOs, points and
-  // multipliers by band, totals, and the claimed score.
+  // multipliers by band, totals, and the claimed score; the QSO rate; and
+  // the multipliers still needed on the band the entry form is on.
   import { scoreStore } from "$lib/score.svelte";
   import { cty } from "$lib/ctyStore.svelte";
   import { activeContest } from "$lib/contests";
+  import { entryBus } from "$lib/entry.svelte";
 
   let s = $derived(scoreStore.score);
   let contest = $derived(activeContest());
@@ -15,6 +17,9 @@
     const parts = s.kinds.map((k) => `${s.mults[k.key].toLocaleString()} ${k.label}`);
     return parts.length > 1 ? `(${parts.join(" + ")})` : parts[0] ?? "";
   });
+  let rate = $derived(scoreStore.rate);
+  let needed = $derived(scoreStore.needed.filter((n) => n.needed.length > 0));
+  let band = $derived(entryBus.currentBand);
 </script>
 
 <section class="panel">
@@ -29,6 +34,12 @@
       <span class="score">{s.score.toLocaleString()}</span>
     </div>
   </header>
+
+  <div class="rate" title="QSOs in the last 10 and 60 minutes; the hourly rate is the last 10 minutes × 6">
+    <span><span class="dim">Rate</span> <b>{rate.perHour10}</b><span class="dim">/h</span></span>
+    <span><span class="dim">10 min</span> <b>{rate.last10}</b></span>
+    <span><span class="dim">60 min</span> <b>{rate.last60}</b></span>
+  </div>
 
   {#if !cty.db}
     <div class="warn">No country file loaded — countries, zones and points can't be worked out.</div>
@@ -77,6 +88,21 @@
       <div class="dim small">{s.dupes} dupe{s.dupes === 1 ? "" : "s"} not counted</div>
     {/if}
   {/if}
+
+  {#if band && needed.length}
+    <div class="needed">
+      <h3>Needed{needed.some((n) => n.kind.perBand) ? ` on ${band}` : ""}</h3>
+      {#each needed as n}
+        <div class="need-row">
+          <span class="dim need-kind">
+            {n.kind.label}{#if n.elsewhere}{" "}<span title="Worked on another band but not on {band}">(other bands)</span>{/if}
+            · {n.needed.length}
+          </span>
+          <span class="need-vals">{n.needed.join(" ")}</span>
+        </div>
+      {/each}
+    </div>
+  {/if}
 </section>
 
 <style>
@@ -111,7 +137,7 @@
     border-collapse: collapse;
     font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
     font-size: 12px;
-    min-width: 320px;
+    min-width: min(320px, 100%);
   }
   th, td { padding: 3px 12px 3px 0; text-align: left; }
   th { color: #6b7176; font-weight: 500; font-size: 10px; text-transform: uppercase; }
@@ -119,5 +145,12 @@
   td.band { color: #fbbf24; }
   tbody td { color: #c5d1de; }
   tfoot td { color: #e6e6e6; font-weight: 600; border-top: 1px solid #2a2f33; }
+  .rate { display: flex; gap: 14px; margin-bottom: 8px; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 12px; color: #e6e6e6; }
+  .rate b { color: #92c5fa; }
+  .needed { margin-top: 10px; border-top: 1px solid #2a2f33; padding-top: 6px; max-height: 160px; overflow-y: auto; }
+  h3 { margin: 0 0 4px; font-size: 10px; text-transform: uppercase; letter-spacing: 1px; color: #6b7176; font-weight: 600; }
+  .need-row { display: flex; gap: 8px; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 11px; line-height: 1.5; }
+  .need-kind { flex: 0 0 auto; white-space: nowrap; }
+  .need-vals { color: #fbbf24; word-break: break-word; }
   .once { display: flex; gap: 14px; margin-top: 6px; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 12px; color: #e6e6e6; }
 </style>

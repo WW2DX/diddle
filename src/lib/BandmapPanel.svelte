@@ -217,8 +217,9 @@
   }
 
   // Click a row: load its call into the entry form AND QSY onto it — the
-  // same thing a waterfall label click does.
+  // same thing a waterfall label click does, S&P switch included.
   async function qsyTo(row: BandmapRow) {
+    settings.setSpMode(true);
     if (row.call) entryBus.setCall(row.call);
     if (!rig.freq) return;
     // Tune so the signal lands at the user's TX mark tone. In DIGL the mark

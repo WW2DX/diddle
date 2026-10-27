@@ -5,6 +5,21 @@ All notable changes to Diddle are documented here. Format loosely follows
 
 ## [Unreleased]
 
+### Added
+- **Needed multipliers** in the Score panel, for the band you're on. Zones and states/provinces are listed against the full list. Countries are listed when you've worked them on another band but not this one.
+- **Rate meter:** QSOs in the last 10 and 60 minutes, and the hourly rate, in the Score panel. The header's rate now drops as QSOs age out instead of holding until the next QSO, and the header shows the score too.
+- **Score in the side column.** With the bandmap docked, Score sits above it, so score, rate and needed mults stay on screen without scrolling.
+- **Shift+PgUp / Shift+PgDn nudge the tuning window** 5 Hz from anywhere.
+
+### Changed
+- **PgUp / PgDn tune the dial ±1 kHz from anywhere,** not only with the waterfall focused. Before, they scrolled the whole page.
+- **Clicking a bandmap spot or a waterfall tag switches to S&P.**
+- **Waterfall tags show the station running on that frequency,** the call that goes with a CQ, TEST or QRZ. Stations calling him no longer get a tag.
+
+### Fixed
+- **Clicking a bandmap spot, a waterfall tag or a call in the RX window scrolled the page** to bring the entry form into view.
+- **Clicking the call already in the Call field cleared Exch.** The next ESM Enter then sent the exchange again instead of TU. Exch is now kept when the clicked call is the one already there.
+
 ## [0.1.36] — 2026-10-16
 
 ### Fixed

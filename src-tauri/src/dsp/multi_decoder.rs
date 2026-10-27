@@ -306,17 +306,50 @@ impl MultiDecoder {
     }
 }
 
-/// Walks the text buffer from newest backward, returns the first
-/// callsign-shaped token found. "Callsign-shaped" is intentionally loose:
-/// 3-8 alphanumeric uppercase chars containing at least one letter and
-/// at least one digit. Real callsigns like R120RB and SX150ITU fit; common
+/// The running station's callsign: the newest callsign-shaped token tied
+/// to a CQ — within a few words after CQ / TEST / QRZ (skipping DE, a
+/// repeated CQ and the like), or straight before TEST / CQ / QRZ ("TU K1XX
+/// W1AW TEST"). Calls that only turn up in someone's exchange or answer
+/// ("W1AW DE K1XX K1XX") are the callers, not who's running there, so they
+/// don't get a tag. "Callsign-shaped" is intentionally loose: 3-8
+/// alphanumeric uppercase chars containing at least one letter and at
+/// least one digit. Real callsigns like R120RB and SX150ITU fit; common
 /// noise tokens like "59" or "ZDYB" do not.
 fn find_callsign(text: &VecDeque<char>) -> Option<String> {
     let s: String = text.iter().collect();
-    // Tokenize on whitespace.
-    for token in s.split(|c: char| !c.is_ascii_alphanumeric()).rev() {
-        if looks_like_callsign(token) {
-            return Some(token.to_string());
+    let tokens: Vec<&str> = s
+        .split(|c: char| !c.is_ascii_alphanumeric())
+        .filter(|t| !t.is_empty())
+        .collect();
+    let is_anchor = |t: &str| matches!(t, "CQ" | "TEST" | "QRZ");
+    // Filler between the CQ and the call.
+    let is_filler = |t: &str| is_anchor(t) || matches!(t, "DE" | "TU" | "RTTY" | "RY" | "K");
+    for i in (0..tokens.len()).rev() {
+        let t = tokens[i];
+        if !looks_like_callsign(t) {
+            continue;
+        }
+        // "... CQ [TEST] [DE] W1AW"
+        let mut j = i;
+        let mut after_cq = false;
+        while j > 0 && i - j < 3 {
+            j -= 1;
+            if is_anchor(tokens[j]) {
+                after_cq = true;
+                break;
+            }
+            if !is_filler(tokens[j]) && tokens[j] != t {
+                break;
+            }
+        }
+        // "W1AW TEST" / "W1AW W1AW CQ"
+        let before_cq = tokens[i + 1..]
+            .iter()
+            .take(2)
+            .take_while(|n| is_anchor(n) || **n == t)
+            .any(|n| is_anchor(n));
+        if after_cq || before_cq {
+            return Some(t.to_string());
         }
     }
     None
@@ -371,5 +404,31 @@ mod tests {
     fn finds_special_event_call() {
         let buf: VecDeque<char> = "CQ DE R120RB R120RB".chars().collect();
         assert_eq!(find_callsign(&buf).as_deref(), Some("R120RB"));
+    }
+
+    #[test]
+    fn finds_runner_in_common_cq_forms() {
+        for (text, want) in [
+            ("CQ TEST W1AW W1AW CQ", "W1AW"),
+            ("CQ CQ TEST DE W1AW W1AW K", "W1AW"),
+            ("TU K1XX W1AW TEST", "W1AW"),
+            ("TU K1XX QRZ W1AW", "W1AW"),
+            ("CQ W1AW TEST", "W1AW"),
+        ] {
+            let buf: VecDeque<char> = text.chars().collect();
+            assert_eq!(find_callsign(&buf).as_deref(), Some(want), "{text}");
+        }
+    }
+
+    #[test]
+    fn skips_callers() {
+        // A caller answering, and the runner's exchange to him: no CQ, no tag.
+        for text in ["W1AW DE K1XX K1XX", "K1XX K1XX", "K1XX 599 05 MA 05 MA K1XX"] {
+            let buf: VecDeque<char> = text.chars().collect();
+            assert_eq!(find_callsign(&buf), None, "{text}");
+        }
+        // The runner keeps his tag after a caller comes in.
+        let buf: VecDeque<char> = "CQ TEST W1AW W1AW K1XX K1XX".chars().collect();
+        assert_eq!(find_callsign(&buf).as_deref(), Some("W1AW"));
     }
 }

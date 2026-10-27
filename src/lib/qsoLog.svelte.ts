@@ -207,12 +207,6 @@ class QsoLog {
     const c = call.toUpperCase();
     return this.qsos.some((q) => q.call === c && q.band === band);
   }
-
-  // QSOs per hour, based on QSOs in the last 10 minutes × 6.
-  get ratePerHour(): number {
-    const cutoff = Date.now() - 10 * 60 * 1000;
-    return this.qsos.filter((q) => q.ts >= cutoff).length * 6;
-  }
 }
 
 export const qsoLog = new QsoLog();

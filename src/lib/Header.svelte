@@ -18,6 +18,7 @@
   import { rfFromAudio } from "$lib/freq";
   import { rttyConfig } from "$lib/rttyConfig.svelte";
   import { qsoLog } from "$lib/qsoLog.svelte";
+  import { scoreStore } from "$lib/score.svelte";
   import { settings } from "$lib/settings.svelte";
 
   let { rig = $bindable() }: { rig: RigState } = $props();
@@ -177,8 +178,12 @@
       <span class="num">{qsoLog.qsos.length}</span>
     </div>
     <div class="stat">
+      <span class="lbl">Score</span>
+      <span class="num">{scoreStore.score.score.toLocaleString()}</span>
+    </div>
+    <div class="stat" title="Hourly rate over the last 10 minutes ({scoreStore.rate.last10} QSOs); {scoreStore.rate.last60} in the last hour">
       <span class="lbl">Rate</span>
-      <span class="num">{qsoLog.ratePerHour}</span><span class="lbl">/hr</span>
+      <span class="num">{scoreStore.rate.perHour10}</span><span class="lbl">/hr</span>
     </div>
     <div class="stat">
       <span class="lbl">Time</span>

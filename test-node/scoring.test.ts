@@ -2,7 +2,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { CtyDb } from "../src/lib/cty.ts";
-import { parseExchange, scoreLog, wpxPrefix, MultTracker, gridDistanceKm, makrothenPoints, jarlCallArea, isMaritimeMobile } from "../src/lib/scoring.ts";
+import { parseExchange, scoreLog, wpxPrefix, MultTracker, gridDistanceKm, makrothenPoints, jarlCallArea, isMaritimeMobile, neededMults, qsoRate } from "../src/lib/scoring.ts";
 
 const db = CtyDb.parse(readFileSync(new URL("../static/cty.dat", import.meta.url), "utf8"));
 const lookup = (c: string) => db.lookup(c);
@@ -137,4 +137,30 @@ test("JARL RTTY: call areas, entities, continent points, maritime mobile", () =>
   assert.equal(s.mults.area, 3);
   assert.equal(s.mults.country, 1);
   assert.equal(s.score, 18 * 4);
+});
+
+test("needed mults: fixed lists per band, countries worked elsewhere", () => {
+  const log = [
+    { call: "DL1ABC", band: "20m", exchRcvd: "14" },
+    { call: "K6XX", band: "20m", exchRcvd: "03 CA" },
+    { call: "DL2ABC", band: "40m", exchRcvd: "14" },
+  ];
+  const n40 = neededMults("cqww-rtty", log, lookup, me, "40m");
+  const zones = n40.find((n) => n.kind.key === "zone")!;
+  assert.equal(zones.needed.length, 39);
+  assert.ok(!zones.needed.includes("14") && zones.needed.includes("3"));
+  const ctys = n40.find((n) => n.kind.key === "country")!;
+  assert.equal(ctys.elsewhere, true);
+  assert.deepEqual(ctys.needed, ["K"]);
+  const regions = n40.find((n) => n.kind.key === "region")!;
+  assert.ok(regions.needed.includes("CA") && !regions.needed.includes("DC"));
+  assert.equal(regions.needed.length, 50 + 13);
+  // WPX prefixes: no fixed list, once per contest — nothing to show.
+  assert.deepEqual(neededMults("wpx-rtty", log, lookup, me, "40m"), []);
+});
+
+test("QSO rate", () => {
+  const now = 10_000_000;
+  const r = qsoRate([now - 60_000, now - 9 * 60_000, now - 30 * 60_000, now - 2 * 3600_000], now);
+  assert.deepEqual(r, { last10: 2, last60: 3, perHour10: 12 });
 });

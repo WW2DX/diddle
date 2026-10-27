@@ -64,10 +64,10 @@
     handle.addEventListener("pointerup", up);
   }
 
-  // A folded bandmap leaves the side column and shows as a bar in the main one.
-  let docked = $derived(
-    settings.bandmapSide && !layout.folded.bandmap && viewportW / zoom >= DOCK_MIN_WIDTH,
-  );
+  // The side column holds what you glance at between QSOs — score, rate,
+  // needed mults — above the bandmap, so none of it is ever a scroll away.
+  // A folded bandmap stays there as a bar under the score.
+  let docked = $derived(settings.bandmapSide && viewportW / zoom >= DOCK_MIN_WIDTH);
 
   function setZoom(z: number) {
     zoom = Math.min(2, Math.max(0.5, Math.round(z * 20) / 20));
@@ -172,9 +172,9 @@
     <PanelFrame id="entry"><EntryWindow {rig} /></PanelFrame>
     <PanelFrame id="fkeys"><FKeys {rig} /></PanelFrame>
     {#if !docked}
+      <PanelFrame id="score"><ScorePanel /></PanelFrame>
       <PanelFrame id="bandmap"><BandmapPanel {rig} /></PanelFrame>
     {/if}
-    <PanelFrame id="score"><ScorePanel /></PanelFrame>
     <PanelFrame id="log"><Logbook /></PanelFrame>
 
     <CollapsiblePanel title="Settings — operator + contest" open={false}>
@@ -193,7 +193,10 @@
         title="Drag to resize the bandmap"
         onpointerdown={startResize}
       ></div>
-      <PanelFrame id="bandmap" fill><BandmapPanel {rig} docked /></PanelFrame>
+      <PanelFrame id="score"><ScorePanel /></PanelFrame>
+      <div class="bm-fill">
+        <PanelFrame id="bandmap" fill={!layout.folded.bandmap}><BandmapPanel {rig} docked /></PanelFrame>
+      </div>
     </aside>
   {/if}
 </main>
@@ -256,5 +259,9 @@
     /* Leave room for the app header above <main>, so the column's bottom
        (the cluster command line) is on screen even before you scroll. */
     height: calc(100vh / var(--zoom, 1) - 24px - var(--main-top, 0px));
+    display: flex;
+    flex-direction: column;
   }
+  /* The bandmap takes whatever height the score leaves. */
+  .bm-fill { flex: 1 1 0; min-height: 0; }
 </style>

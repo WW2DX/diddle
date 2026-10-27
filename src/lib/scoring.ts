@@ -360,6 +360,15 @@ export class MultTracker {
     return out;
   }
 
+  /// Values of one multiplier kind worked so far — on `band` for a
+  /// per-band kind, anywhere for a once-per-contest one.
+  workedValues(kind: MultKind, band: string): Set<string> {
+    const prefix = kind.perBand ? `${kind.key}|${band}|` : `${kind.key}||`;
+    const out = new Set<string>();
+    for (const k of this.seen) if (k.startsWith(prefix)) out.add(k.slice(prefix.length));
+    return out;
+  }
+
   isDupe(q: ScoreQso): boolean {
     return this.worked.has(`${q.call.toUpperCase()}|${q.band}`);
   }
@@ -455,4 +464,86 @@ export function scoreLog(
 function idx(band: string): number {
   const i = BAND_ORDER.indexOf(band);
   return i < 0 ? 99 : i;
+}
+
+// ---- Needed multipliers ----
+
+const VE_CANON = ["NL", "NS", "PE", "NB", "QC", "ON", "MB", "SK", "AB", "BC", "NT", "NU", "YT"];
+
+/// Every possible value of a multiplier kind, where the list is short and
+/// fixed (zones, states/provinces); null where it isn't (countries,
+/// prefixes, call areas).
+function multUniverse(contestId: string, kind: string): string[] | null {
+  switch (kind) {
+    case "zone":
+      return Array.from({ length: 40 }, (_, i) => String(i + 1));
+    case "region": {
+      // DC is its own multiplier only in NAQP; elsewhere it counts as MD.
+      const states = [...US_STATES].filter((s) => contestId === "naqp-rtty" || s !== "DC");
+      return [...states, ...VE_CANON];
+    }
+    default:
+      return null;
+  }
+}
+
+export interface NeededMults {
+  kind: MultKind;
+  /// Still needed: from the full list where there is one, otherwise the
+  /// ones worked on another band but not this one.
+  needed: string[];
+  /// True when `needed` is the "worked elsewhere, not here" list.
+  elsewhere: boolean;
+}
+
+/// What's still needed on `band`, per multiplier kind. A once-per-contest
+/// kind with no fixed list (WPX prefixes) has nothing useful to show and
+/// is left out.
+export function neededMults(
+  contestId: string,
+  qsos: ScoreQso[],
+  lookup: Lookup,
+  my: CtyHit | null,
+  band: string,
+  ctx: ScoreCtx = {},
+): NeededMults[] {
+  const t = new MultTracker(contestId, lookup, my, ctx);
+  for (const q of qsos) t.add(q);
+  const out: NeededMults[] = [];
+  for (const k of t.rules.kinds) {
+    const worked = t.workedValues(k, band);
+    const all = multUniverse(contestId, k.key);
+    if (all) {
+      out.push({ kind: k, needed: all.filter((v) => !worked.has(v)), elsewhere: false });
+    } else if (k.perBand) {
+      const other = new Set<string>();
+      for (const b of BAND_ORDER) {
+        if (b === band) continue;
+        for (const v of t.workedValues(k, b)) if (!worked.has(v)) other.add(v);
+      }
+      out.push({ kind: k, needed: [...other].sort(), elsewhere: true });
+    }
+  }
+  return out;
+}
+
+// ---- Rate ----
+
+export interface Rate {
+  last10: number; // QSOs in the last 10 minutes
+  last60: number; // QSOs in the last 60 minutes
+  /// Hourly rate over the last 10 minutes (last10 × 6).
+  perHour10: number;
+}
+
+export function qsoRate(times: number[], now: number): Rate {
+  let last10 = 0;
+  let last60 = 0;
+  for (const ts of times) {
+    const age = now - ts;
+    if (age < 0) continue;
+    if (age <= 10 * 60_000) last10++;
+    if (age <= 60 * 60_000) last60++;
+  }
+  return { last10, last60, perHour10: last10 * 6 };
 }

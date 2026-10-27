@@ -4,7 +4,8 @@
 import { qsoLog } from "./qsoLog.svelte";
 import { settings } from "./settings.svelte";
 import { cty } from "./ctyStore.svelte";
-import { MultTracker, scoreLog, type Score } from "./scoring";
+import { entryBus } from "./entry.svelte";
+import { MultTracker, neededMults, qsoRate, scoreLog, type NeededMults, type Rate, type Score } from "./scoring";
 
 class ScoreStore {
   private lookup = (c: string) => cty.lookup(c);
@@ -18,6 +19,24 @@ class ScoreStore {
       myGrid: settings.myGrid,
     });
   });
+
+  /// What's still needed on the band the entry form is on.
+  needed = $derived.by<NeededMults[]>(() => {
+    cty.db;
+    const band = entryBus.currentBand;
+    if (!band) return [];
+    return neededMults(settings.activeContest, qsoLog.qsos, this.lookup, this.my, band, {
+      myGrid: settings.myGrid,
+    });
+  });
+
+  // Ticks so the rate falls off as QSOs age out of the window.
+  now = $state(Date.now());
+  constructor() {
+    setInterval(() => (this.now = Date.now()), 15_000);
+  }
+
+  rate = $derived.by<Rate>(() => qsoRate(qsoLog.qsos.map((q) => q.ts), this.now));
 
   // Everything logged so far, for "would this be a new mult?" questions.
   private tracker = $derived.by(() => {
