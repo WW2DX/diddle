@@ -5,6 +5,8 @@ All notable changes to Diddle are documented here. Format loosely follows
 
 ## [Unreleased]
 
+## [0.1.37] — 2026-10-27
+
 ### Added
 - **Needed multipliers** in the Score panel, for the band you're on. Zones and states/provinces are listed against the full list. Countries are listed when you've worked them on another band but not this one.
 - **Rate meter:** QSOs in the last 10 and 60 minutes, and the hourly rate, in the Score panel. The header's rate now drops as QSOs age out instead of holding until the next QSO, and the header shows the score too.
